@@ -1,0 +1,27 @@
+source        10mm_temperature_tower_0.4n_0.3mm_PLA_Voron 0.4mm CHT_2h24m.gcode
+range         270 ... 280 C  (bands 19-21)
+flavor        klipper absolute-E
+source tower  21 bands, 10.000 mm each, 210.50 mm, 702 layers
+base          0.800 mm, z offset -179.700 mm
+printed       103 layers, 30.800 mm
+lines         243356 -> 40134
+time          23 min
+filament      2218.78 mm = 5.34 cm3
+stripped temp 2
+
+band  temp  source Z            print Z             layers
+  19  270  180.800-190.700     1.100-11.000        602-635
+  20  275  191.000-200.600     11.300-20.900       636-668
+  21  280  200.900-210.500     21.200-30.800       669-701
+
+; >>> print_calibration_tool tt map begin
+; tt model = temperature tower, 21 bands, 10.000 mm each
+; tt printed = 270 ... 280 C, bands 19-21
+; tt base = 3 layers up to Z 0.800, source layers 0-1, last one repeated 1x
+; tt z offset = -179.7 mm
+; tt band 19 | 270 C | source Z 180.800-190.700 | print Z 1.100-11.000 | layers 602-635
+; tt band 20 | 275 C | source Z 191.000-200.600 | print Z 11.300-20.900 | layers 636-668
+; tt band 21 | 280 C | source Z 200.900-210.500 | print Z 21.200-30.800 | layers 669-701
+; <<< print_calibration_tool tt map end
+
+sha256        bade7beef3acf3b8ac57d7b951516c3d73d1d638f1996a3b3619349e7abf290c

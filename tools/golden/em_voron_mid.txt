@@ -1,0 +1,131 @@
+source        em_neu_Extrusion_Multipliers_0.4n_0.3mm_PLA_Voron 0.4mm CHT_4h31m.gcode
+flavor        klipper absolute-E
+profile       1.000
+range         0.950 … 1.000
+objects       56 (11 printed, 45 removed)
+lines         271292 -> 55351 (+105 inserted, -216046 dropped, 32304 E values changed, 10 seam fixes)
+time          54 min
+extrusion     52715.94 -> 10092.97 mm inside objects
+filament      10092.97 mm = 24.28 cm3
+sha256        dcf777d928ffa786f450c204b9766da4ff8eabd16abfc07f1d2ae762a9f6b970
+
+--- inserted block ---
+; >>> print_calibration_tool em map begin
+; em profile multiplier = 1.000
+; em selected = 0.950 … 1.000, 11 of 56 plates
+; em object 0 | 0_850 | em=0.850 | factor=0.85000 | x=23.500 | y=197.000 | removed, outside the selected range
+; em object 1 | 0_885 | em=0.885 | factor=0.88500 | x=52.500 | y=81.000 | removed, outside the selected range
+; em object 2 | 0_855 | em=0.855 | factor=0.85500 | x=81.500 | y=168.000 | removed, outside the selected range
+; em object 3 | 0_875 | em=0.875 | factor=0.87500 | x=81.500 | y=81.000 | removed, outside the selected range
+; em object 4 | 0_860 | em=0.860 | factor=0.86000 | x=139.500 | y=110.000 | removed, outside the selected range
+; em object 5 | 0_880 | em=0.880 | factor=0.88000 | x=139.500 | y=81.000 | removed, outside the selected range
+; em object 6 | 0_905 | em=0.905 | factor=0.90500 | x=168.500 | y=81.000 | removed, outside the selected range
+; em object 7 | 0_870 | em=0.870 | factor=0.87000 | x=110.500 | y=81.000 | removed, outside the selected range
+; em object 8 | 0_895 | em=0.895 | factor=0.89500 | x=226.500 | y=23.000 | removed, outside the selected range
+; em object 9 | 0_910 | em=0.910 | factor=0.91000 | x=110.500 | y=52.000 | removed, outside the selected range
+; em object 10 | 0_995 | em=0.995 | factor=0.99500 | x=168.500 | y=23.000 | printed
+; em object 11 | 0_935 | em=0.935 | factor=0.93500 | x=110.500 | y=139.000 | removed, outside the selected range
+; em object 12 | 1_020 | em=1.020 | factor=1.02000 | x=226.500 | y=52.000 | removed, outside the selected range
+; em object 13 | 0_865 | em=0.865 | factor=0.86500 | x=139.500 | y=168.000 | removed, outside the selected range
+; em object 14 | 0_950 | em=0.950 | factor=0.95000 | x=52.500 | y=52.000 | printed
+; em object 15 | 0_965 | em=0.965 | factor=0.96500 | x=168.500 | y=168.000 | printed
+; em object 16 | 0_990 | em=0.990 | factor=0.99000 | x=110.500 | y=23.000 | printed
+; em object 17 | 1_025 | em=1.025 | factor=1.02500 | x=23.500 | y=110.000 | removed, outside the selected range
+; em object 18 | 0_980 | em=0.980 | factor=0.98000 | x=197.500 | y=81.000 | printed
+; em object 19 | 0_900 | em=0.900 | factor=0.90000 | x=168.500 | y=139.000 | removed, outside the selected range
+; em object 20 | 0_945 | em=0.945 | factor=0.94500 | x=81.500 | y=52.000 | removed, outside the selected range
+; em object 21 | 0_955 | em=0.955 | factor=0.95500 | x=168.500 | y=52.000 | printed
+; em object 22 | 0_890 | em=0.890 | factor=0.89000 | x=168.500 | y=110.000 | removed, outside the selected range
+; em object 23 | 0_915 | em=0.915 | factor=0.91500 | x=139.500 | y=52.000 | removed, outside the selected range
+; em object 24 | 0_970 | em=0.970 | factor=0.97000 | x=197.500 | y=110.000 | printed
+; em object 25 | 0_975 | em=0.975 | factor=0.97500 | x=197.500 | y=139.000 | printed
+; em object 26 | 0_985 | em=0.985 | factor=0.98500 | x=139.500 | y=23.000 | printed
+; em object 27 | 0_925 | em=0.925 | factor=0.92500 | x=81.500 | y=110.000 | removed, outside the selected range
+; em object 28 | 1_010 | em=1.010 | factor=1.01000 | x=52.500 | y=23.000 | removed, outside the selected range
+; em object 29 | 0_930 | em=0.930 | factor=0.93000 | x=197.500 | y=197.000 | removed, outside the selected range
+; em object 30 | 0_960 | em=0.960 | factor=0.96000 | x=226.500 | y=197.000 | printed
+; em object 31 | 0_940 | em=0.940 | factor=0.94000 | x=110.500 | y=110.000 | removed, outside the selected range
+; em object 32 | 1_015 | em=1.015 | factor=1.01500 | x=23.500 | y=81.000 | removed, outside the selected range
+; em object 33 | 0_920 | em=0.920 | factor=0.92000 | x=81.500 | y=139.000 | removed, outside the selected range
+; em object 34 | 1_000 | em=1.000 | factor=1.00000 | x=197.500 | y=52.000 | printed
+; em object 35 | 1_005 | em=1.005 | factor=1.00500 | x=81.500 | y=23.000 | removed, outside the selected range
+; em object 36 | 1_030 | em=1.030 | factor=1.03000 | x=23.500 | y=52.000 | removed, outside the selected range
+; em object 37 | 1_035 | em=1.035 | factor=1.03500 | x=23.500 | y=139.000 | removed, outside the selected range
+; em object 38 | 1_040 | em=1.040 | factor=1.04000 | x=110.500 | y=197.000 | removed, outside the selected range
+; em object 39 | 1_105 | em=1.105 | factor=1.10500 | x=197.500 | y=168.000 | removed, outside the selected range
+; em object 40 | 1_080 | em=1.080 | factor=1.08000 | x=52.500 | y=139.000 | removed, outside the selected range
+; em object 41 | 1_085 | em=1.085 | factor=1.08500 | x=52.500 | y=110.000 | removed, outside the selected range
+; em object 42 | 1_075 | em=1.075 | factor=1.07500 | x=110.500 | y=168.000 | removed, outside the selected range
+; em object 43 | 1_120 | em=1.120 | factor=1.12000 | x=226.500 | y=81.000 | removed, outside the selected range
+; em object 44 | 1_055 | em=1.055 | factor=1.05500 | x=81.500 | y=197.000 | removed, outside the selected range
+; em object 45 | 1_065 | em=1.065 | factor=1.06500 | x=197.500 | y=23.000 | removed, outside the selected range
+; em object 46 | 1_060 | em=1.060 | factor=1.06000 | x=52.500 | y=168.000 | removed, outside the selected range
+; em object 47 | 1_125 | em=1.125 | factor=1.12500 | x=139.500 | y=139.000 | removed, outside the selected range
+; em object 48 | 1_115 | em=1.115 | factor=1.11500 | x=226.500 | y=139.000 | removed, outside the selected range
+; em object 49 | 1_095 | em=1.095 | factor=1.09500 | x=23.500 | y=168.000 | removed, outside the selected range
+; em object 50 | 1_100 | em=1.100 | factor=1.10000 | x=52.500 | y=197.000 | removed, outside the selected range
+; em object 51 | 1_070 | em=1.070 | factor=1.07000 | x=226.500 | y=168.000 | removed, outside the selected range
+; em object 52 | 1_050 | em=1.050 | factor=1.05000 | x=139.500 | y=197.000 | removed, outside the selected range
+; em object 53 | 1_045 | em=1.045 | factor=1.04500 | x=23.500 | y=23.000 | removed, outside the selected range
+; em object 54 | 1_090 | em=1.090 | factor=1.09000 | x=168.500 | y=197.000 | removed, outside the selected range
+; em object 55 | 1_110 | em=1.110 | factor=1.11000 | x=226.500 | y=110.000 | removed, outside the selected range
+; <<< print_calibration_tool em map end
+
+--- flow per object ---
+id  name                    factor    in [mm]     out [mm]    ratio
+0   0_850                   0.85000   940.761     -           -
+1   0_885                   0.88500   940.883     -           -
+2   0_855                   0.85500   940.938     -           -
+3   0_875                   0.87500   941.252     -           -
+4   0_860                   0.86000   941.000     -           -
+5   0_880                   0.88000   940.880     -           -
+6   0_905                   0.90500   940.892     -           -
+7   0_870                   0.87000   941.105     -           -
+8   0_895                   0.89500   940.885     -           -
+9   0_910                   0.91000   941.410     -           -
+10  0_995                   0.99500   941.146     936.441     0.99500
+11  0_935                   0.93500   941.176     -           -
+12  1_020                   1.02000   941.278     -           -
+13  0_865                   0.86500   941.083     -           -
+14  0_950                   0.95000   941.062     894.009     0.95000
+15  0_965                   0.96500   941.050     908.112     0.96500
+16  0_990                   0.99000   941.060     931.651     0.99000
+17  1_025                   1.02500   941.598     -           -
+18  0_980                   0.98000   940.790     921.975     0.98000
+19  0_900                   0.90000   940.883     -           -
+20  0_945                   0.94500   941.413     -           -
+21  0_955                   0.95500   941.003     898.658     0.95500
+22  0_890                   0.89000   940.855     -           -
+23  0_915                   0.91500   941.641     -           -
+24  0_970                   0.97000   940.972     912.741     0.97000
+25  0_975                   0.97500   941.432     917.893     0.97500
+26  0_985                   0.98500   940.943     926.831     0.98500
+27  0_925                   0.92500   941.011     -           -
+28  1_010                   1.01000   941.718     -           -
+29  0_930                   0.93000   941.003     -           -
+30  0_960                   0.96000   940.911     903.275     0.96000
+31  0_940                   0.94000   941.246     -           -
+32  1_015                   1.01500   942.045     -           -
+33  0_920                   0.92000   940.774     -           -
+34  1_000                   1.00000   941.386     941.386     1.00000
+35  1_005                   1.00500   941.450     -           -
+36  1_030                   1.03000   941.396     -           -
+37  1_035                   1.03500   941.651     -           -
+38  1_040                   1.04000   941.527     -           -
+39  1_105                   1.10500   941.981     -           -
+40  1_080                   1.08000   941.294     -           -
+41  1_085                   1.08500   941.432     -           -
+42  1_075                   1.07500   941.864     -           -
+43  1_120                   1.12000   942.017     -           -
+44  1_055                   1.05500   941.465     -           -
+45  1_065                   1.06500   941.588     -           -
+46  1_060                   1.06000   941.492     -           -
+47  1_125                   1.12500   942.295     -           -
+48  1_115                   1.11500   942.779     -           -
+49  1_095                   1.09500   941.336     -           -
+50  1_100                   1.10000   942.401     -           -
+51  1_070                   1.07000   941.547     -           -
+52  1_050                   1.05000   941.396     -           -
+53  1_045                   1.04500   941.702     -           -
+54  1_090                   1.09000   941.431     -           -
+55  1_110                   1.11000   942.401     -           -

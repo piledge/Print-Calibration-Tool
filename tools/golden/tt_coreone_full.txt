@@ -1,0 +1,63 @@
+source        10mm_temperature_tower_0.4n_0.25mm_PLA_COREONE_2h20m.bgcode
+range         180 ... 280 C  (bands 1-21)
+flavor        marlin2 relative-E
+source tower  21 bands, 10.000 mm each, 210.70 mm, 843 layers
+base          0.700 mm, z offset 0.000 mm
+printed       843 layers, 210.700 mm
+lines         233914 -> 233982
+time          139 min (152 min silent)
+filament      12208.64 mm = 29.37 cm3
+stripped temp 1
+
+band  temp  source Z            print Z             layers
+   1  180  0.950-10.700        0.950-10.700        3-42
+   2  185  10.950-20.700       10.950-20.700       43-82
+   3  190  20.950-30.700       20.950-30.700       83-122
+   4  195  30.950-40.700       30.950-40.700       123-162
+   5  200  40.950-50.700       40.950-50.700       163-202
+   6  205  50.950-60.700       50.950-60.700       203-242
+   7  210  60.950-70.700       60.950-70.700       243-282
+   8  215  70.950-80.700       70.950-80.700       283-322
+   9  220  80.950-90.700       80.950-90.700       323-362
+  10  225  90.950-100.700      90.950-100.700      363-402
+  11  230  100.950-110.700     100.950-110.700     403-442
+  12  235  110.950-120.700     110.950-120.700     443-482
+  13  240  120.950-130.700     120.950-130.700     483-522
+  14  245  130.950-140.700     130.950-140.700     523-562
+  15  250  140.950-150.700     140.950-150.700     563-602
+  16  255  150.950-160.700     150.950-160.700     603-642
+  17  260  160.950-170.700     160.950-170.700     643-682
+  18  265  170.950-180.700     170.950-180.700     683-722
+  19  270  180.950-190.700     180.950-190.700     723-762
+  20  275  190.950-200.700     190.950-200.700     763-802
+  21  280  200.950-210.700     200.950-210.700     803-842
+
+; >>> print_calibration_tool tt map begin
+; tt model = temperature tower, 21 bands, 10.000 mm each
+; tt printed = 180 ... 280 C, bands 1-21
+; tt base = 3 layers up to Z 0.700, source layers 0-2, last one repeated 0x
+; tt z offset = 0 mm
+; tt band 1 | 180 C | source Z 0.950-10.700 | print Z 0.950-10.700 | layers 3-42
+; tt band 2 | 185 C | source Z 10.950-20.700 | print Z 10.950-20.700 | layers 43-82
+; tt band 3 | 190 C | source Z 20.950-30.700 | print Z 20.950-30.700 | layers 83-122
+; tt band 4 | 195 C | source Z 30.950-40.700 | print Z 30.950-40.700 | layers 123-162
+; tt band 5 | 200 C | source Z 40.950-50.700 | print Z 40.950-50.700 | layers 163-202
+; tt band 6 | 205 C | source Z 50.950-60.700 | print Z 50.950-60.700 | layers 203-242
+; tt band 7 | 210 C | source Z 60.950-70.700 | print Z 60.950-70.700 | layers 243-282
+; tt band 8 | 215 C | source Z 70.950-80.700 | print Z 70.950-80.700 | layers 283-322
+; tt band 9 | 220 C | source Z 80.950-90.700 | print Z 80.950-90.700 | layers 323-362
+; tt band 10 | 225 C | source Z 90.950-100.700 | print Z 90.950-100.700 | layers 363-402
+; tt band 11 | 230 C | source Z 100.950-110.700 | print Z 100.950-110.700 | layers 403-442
+; tt band 12 | 235 C | source Z 110.950-120.700 | print Z 110.950-120.700 | layers 443-482
+; tt band 13 | 240 C | source Z 120.950-130.700 | print Z 120.950-130.700 | layers 483-522
+; tt band 14 | 245 C | source Z 130.950-140.700 | print Z 130.950-140.700 | layers 523-562
+; tt band 15 | 250 C | source Z 140.950-150.700 | print Z 140.950-150.700 | layers 563-602
+; tt band 16 | 255 C | source Z 150.950-160.700 | print Z 150.950-160.700 | layers 603-642
+; tt band 17 | 260 C | source Z 160.950-170.700 | print Z 160.950-170.700 | layers 643-682
+; tt band 18 | 265 C | source Z 170.950-180.700 | print Z 170.950-180.700 | layers 683-722
+; tt band 19 | 270 C | source Z 180.950-190.700 | print Z 180.950-190.700 | layers 723-762
+; tt band 20 | 275 C | source Z 190.950-200.700 | print Z 190.950-200.700 | layers 763-802
+; tt band 21 | 280 C | source Z 200.950-210.700 | print Z 200.950-210.700 | layers 803-842
+; <<< print_calibration_tool tt map end
+
+sha256        6762f3fff98061b514b33703bcf56180e7524f27113d7c34312bf0daeab9945f

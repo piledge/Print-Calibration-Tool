@@ -1,0 +1,25 @@
+# No dependencies and no build step; package.json only marks the modules under
+# tools/ as ESM so node can run them.
+node_modules/
+__pycache__/
+
+*.log
+.DS_Store
+
+# The sample prints the test suite reads: 19 MB of sliced private models. They
+# stay local. tools/ and the CI workflow are versioned, so the suite runs what
+# it can without them and says which sections it had to skip.
+/References/
+
+# Working documents: German, written for me, of no use to anyone else.
+/AGENTS.md
+/CLAUDE.md
+/ENTWICKLUNG.md
+/KONZEPT.md
+/VORGABEN.md
+/NOTIZEN-referenz-tools.md
+
+# Generated test files like to land in the root
+/PA_*.gcode
+/EM_*.gcode
+/TT_*.gcode

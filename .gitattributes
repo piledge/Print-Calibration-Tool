@@ -1,0 +1,18 @@
+* text=auto eol=lf
+
+*.wasm   binary
+*.stl    binary
+*.3mf    binary
+*.png    binary
+*.bgcode binary
+
+# Prusa's Emscripten build - 50k lines that would otherwise decide the
+# language statistics of this repository.
+vendor/**             linguist-vendored
+
+# Test data, not source.
+tools/fixtures/**     linguist-generated -diff
+
+# Recorded outputs: keep them out of the language statistics, but their diffs
+# are the whole point of a golden file - do not collapse those.
+tools/golden/**       linguist-detectable=false

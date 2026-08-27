@@ -1,0 +1,6 @@
+{
+  "name": "print-calibration-tool",
+  "private": true,
+  "type": "module",
+  "description": "No dependencies and no build step. The page is served as it is."
+}

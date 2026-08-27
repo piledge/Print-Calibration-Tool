@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Three print-calibration tests in the browser: temperature tower, pressure advance and extrusion multiplier. Drop in a file you sliced yourself, pick a range, get gcode back. Nothing is uploaded.">
+<title>Print Calibration Tool</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="icon" href="favicon.png" type="image/png" sizes="32x32">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div class="shell">
+
+  <header class="titlebar">
+    <h1>Print Calibration Tool</h1>
+  </header>
+
+  <div class="tabs" role="radiogroup" aria-label="Calibration test">
+    <button type="button" class="tab" id="tab-tt" role="radio" aria-checked="true">Temperature Tower</button>
+    <button type="button" class="tab" id="tab-pa" role="radio" aria-checked="false" tabindex="-1">Pressure Advance</button>
+    <button type="button" class="tab" id="tab-em" role="radio" aria-checked="false" tabindex="-1">Extrusion Multiplier</button>
+  </div>
+
+  <main>
+
+    <fieldset id="step-1" class="panel">
+      <legend><span class="num">1</span> Load sliced gcode</legend>
+
+      <div class="template-row">
+        <p id="tt-template" class="template-line">
+          <a class="fake-btn" href="template/TemperatureTower_template.stl" download>Download template</a>
+          <span class="template-note">tower model, 21 bands 180 &hellip; 280 &deg;C &middot; .stl, 6.6 MB</span>
+        </p>
+
+        <p id="pa-template" class="template-line" hidden>
+          <a class="fake-btn" href="template/PressureAdvance_template.stl" download>Download template</a>
+          <span class="template-note">100 mm cube, if you have nothing else to slice &middot; .stl, 0.7 kB</span>
+        </p>
+
+        <p id="em-template" class="template-line" hidden>
+          <a class="fake-btn" href="template/ExtrusionMultiplier_template.3mf" download>Download template</a>
+          <span class="template-note">56 plates 0.850 &hellip; 1.125 &middot; .3mf, 0.8 MB</span>
+        </p>
+      </div>
+
+      <div class="step-hint">
+        <p id="tt-hint-1" class="hint">Slice the template at its full height and with your
+          required settings. Put the gcode-file in the Dropzone and pick the values
+          of your desired test range.</p>
+        <p id="pa-hint-1" class="hint" hidden>Slice any file with your required settings. Put the
+          gcode-file in the Dropzone and pick the values of your desired test range.</p>
+        <p id="em-hint-1" class="hint" hidden>Slice the template with all plates and with your
+          required settings. Put the gcode-file in the Dropzone and pick the values
+          of your desired test range.</p>
+      </div>
+
+      <!-- The box is the drop target, the prompt inside it is the button: the
+           history rows are buttons too, and interactive elements must not
+           nest. -->
+      <div id="dropzone" class="dropzone">
+        <div id="drop-prompt" class="drop-prompt" tabindex="0" role="button"
+             aria-controls="file-input">
+          <p class="drop-main">Drop a .gcode or .bgcode file here</p>
+          <p class="drop-sub">sliced with PrusaSlicer</p>
+          <p class="drop-browse"><span class="fake-btn">Browse...</span></p>
+        </div>
+
+        <div id="history-box" class="history-box" hidden>
+          <p class="history-head">
+            <span id="history-caption">Recent files</span>
+            <button type="button" id="history-clear" class="btn-small">Clear</button>
+          </p>
+          <ul id="history-list" class="history-list" aria-labelledby="history-caption"></ul>
+        </div>
+      </div>
+
+      <label class="visually-hidden" for="file-input">Sliced gcode file</label>
+      <input type="file" id="file-input" class="visually-hidden" accept=".gcode,.bgcode">
+
+      <p id="file-name" class="file-name" aria-live="polite"></p>
+      <p id="summary" class="summary"></p>
+
+      <details id="settings-details">
+        <summary>Detected slicer settings</summary>
+        <div class="table-wrap">
+          <table class="settings-table">
+            <thead>
+              <tr>
+                <th scope="col">Setting</th>
+                <th scope="col">Value</th>
+                <th scope="col">Source</th>
+              </tr>
+            </thead>
+            <tbody id="settings-body"></tbody>
+          </table>
+        </div>
+      </details>
+    </fieldset>
+
+    <div class="cols">
+
+      <fieldset id="step-2" class="panel" disabled>
+        <legend><span class="num">2</span> <span id="legend-2">Test parameters</span></legend>
+
+        <div id="tt-params">
+          <div class="field-row reset-row">
+            <button type="button" id="tt-reset-btn" class="btn-small">Defaults</button>
+          </div>
+
+          <div class="field-row">
+            <label for="tt-from">From</label>
+            <select id="tt-from"></select>
+          </div>
+
+          <div class="field-row">
+            <label for="tt-to">To</label>
+            <select id="tt-to"></select>
+          </div>
+        </div>
+
+        <div id="pa-params" hidden>
+          <div class="field-row reset-row">
+            <button type="button" id="reset-btn" class="btn-small"
+                    title="Back to 0.025 … 0.080, increment 0.0025, anchor frame, 5 layers">Defaults</button>
+          </div>
+
+          <div class="field-row">
+            <label for="pa-start">PA start</label>
+            <input type="number" id="pa-start" class="num-input" value="0.025" step="0.001" min="0">
+          </div>
+
+          <div class="field-row">
+            <label for="pa-end">PA end</label>
+            <input type="number" id="pa-end" class="num-input" value="0.080" step="0.001" min="0">
+          </div>
+
+          <div class="field-row">
+            <label for="pa-step">Increment</label>
+            <input type="number" id="pa-step" class="num-input" value="0.0025" step="0.0005" min="0"
+                   title="Arrow keys step by 0.0005. Any value down to 0.0001 can be typed.">
+          </div>
+
+          <!-- Defaults live in the markup (value/selected/checked), not in the
+               script: the Defaults button in js/pa/test.js reads them back via
+               defaultValue/defaultSelected/defaultChecked. -->
+          <div class="field-row">
+            <label for="anchor">Anchor</label>
+            <select id="anchor">
+              <option value="frame" selected>Anchor frame</option>
+              <option value="layer">Anchor layer</option>
+              <option value="none">No anchor</option>
+            </select>
+          </div>
+
+          <div class="field-row">
+            <label for="layers">Layers</label>
+            <input type="number" id="layers" class="num-input" value="5" step="1" min="2">
+          </div>
+
+          <div class="field-row check-row">
+            <input type="checkbox" id="print-numbers" checked>
+            <label for="print-numbers">Print PA numbers</label>
+          </div>
+        </div>
+
+        <div id="em-plates" hidden>
+          <div class="field-row reset-row">
+            <button type="button" id="em-reset-btn" class="btn-small">Defaults</button>
+          </div>
+
+          <div class="field-row">
+            <label for="em-from">From</label>
+            <select id="em-from"></select>
+          </div>
+
+          <div class="field-row">
+            <label for="em-to">To</label>
+            <select id="em-to"></select>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset id="step-3" class="panel" disabled>
+        <legend><span class="num">3</span> Preview</legend>
+        <div class="screen">
+          <canvas id="preview-canvas" width="560" height="420" role="img"
+              aria-label="Test preview"></canvas>
+        </div>
+        <p id="preview-info" class="preview-info"></p>
+      </fieldset>
+
+    </div>
+
+    <ul id="messages" class="messages" aria-live="polite"></ul>
+
+    <fieldset id="step-4" class="panel" disabled>
+      <legend><span class="num">4</span> Download</legend>
+      <div class="download-row">
+        <button type="button" id="download-btn">Download test gcode</button>
+        <span id="download-name" class="download-name"></span>
+      </div>
+    </fieldset>
+
+    <fieldset id="step-5" class="panel" disabled>
+      <legend><span class="num">5</span> Result</legend>
+      <div class="step-hint">
+        <p class="result-hint hint" id="tt-hint">Pick the band with the best surface and the
+          cleanest overhang — pick its temperature below or click it in the preview above.</p>
+        <p class="result-hint hint" id="pa-hint" hidden>Pick the chevron with the sharpest corner and the
+          fewest artefacts — pick its value below or click it in the preview above.</p>
+        <p class="result-hint hint" id="em-hint" hidden>Pick the plate whose top surface is just filled
+          (no gaps between lines, no ridges) — pick its value below or click it in the preview above.</p>
+      </div>
+      <div class="field-row">
+        <label for="best-value" id="best-label">Best line</label>
+        <select id="best-value"></select>
+        <span id="best-info" class="download-name"></span>
+      </div>
+      <pre id="best-out" class="code-out"></pre>
+      <button type="button" id="copy-btn">Copy</button>
+    </fieldset>
+
+  </main>
+
+  <footer class="statusbar">
+    <p class="version">v0.1 beta</p>
+    <!-- Section 13 of the AGPL requires this link once the page runs publicly. -->
+    <p class="source"><a href="https://github.com/piledge/Print-Calibration-Tool">Source</a></p>
+    <p>piledge 2026</p>
+  </footer>
+
+</div>
+
+<script>
+  window.bgcodeReady = new Promise(function (res, rej) {
+    window.__bgcodeFail = rej;
+    window.Module = {
+      onRuntimeInitialized: function () { res(window.Module); },
+      onAbort: function (what) { rej(new Error('decoder aborted: ' + what)); }
+    };
+  });
+</script>
+<script src="vendor/bgcode.js"
+        onerror="window.__bgcodeFail(new Error('vendor/bgcode.js could not be loaded'))"></script>
+<script type="module" src="js/app.js"></script>
+
+</body>
+</html>

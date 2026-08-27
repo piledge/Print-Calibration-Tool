@@ -1,0 +1,876 @@
+/* ==========================================================================
+   Print Calibration Tool — design system
+   Lab instrument, around 1994: case grey, bevelled edges, monospace. No radii,
+   no shadows, no gradients, no transitions, no web fonts.
+
+   Order: tokens, basics, case, the five steps in page order, utilities last.
+   ========================================================================== */
+
+:root{
+  --bg:#c0c0b8;   --panel:#cbcbc3;  --field:#e9e9e1;
+  --ink:#1a1a18;  --line:#4e4e48;
+  --lit:#f2f2ea;  --dim:#84847c;                  /* bevel light / dark */
+
+  /* Screen tones. --trace-dim and --trace-alt are unused here: the preview is
+     drawn on canvas and COLOR in js/canvas.js repeats the same values as
+     literals. They stand as the twin -- change one tone, change both places. */
+  --screen:#141a12; --trace:#8ed14a; --trace-dim:#3f6b26; --trace-alt:#d8c24a;
+
+  /* Warning and alarm as text on a light ground: 4.9 and 5.0 to one against the
+     case. canvas.js carries lighter variants of both, because there they sit on
+     the dark screen and need the contrast the other way. */
+  --amber:#764509; --alarm:#94261f;
+
+  --font:ui-monospace, "DejaVu Sans Mono", "Liberation Mono", Consolas, monospace;
+
+  /* Three steps, the interface needs no more: title = page title · base =
+     frame, controls, labels · small = dense data · track = every uppercase
+     text. */
+  --fs-title:16px;  --fs-base:14px;  --fs-small:12px;  --track:.08em;
+
+  /* The upload box holds five history rows; its height is added up from these
+     and never changes, so nothing below it moves as the list fills up. Each is
+     enforced, not just assumed: measured heights carry fractions of a pixel and
+     would make the box wobble between 197 and 198. */
+  --hist-row-h:22px;      /* one file row */
+  --hist-head-h:25px;     /* the caption line -- the Clear button sets it */
+  --hist-gap:3px;         /* caption to first row */
+  --drop-prompt-h:43px;   /* the prompt once it is one line */
+}
+
+/* --- reset ---------------------------------------------------------------- */
+
+/* border-radius belongs here and nowhere else: one rule takes the corners off
+   every element -- including the controls the browser pre-rounds. */
+*,
+*::before,
+*::after{
+  box-sizing:border-box;
+  border-radius:0;
+}
+
+html{
+  background:var(--bg);
+}
+
+body{
+  margin:0;
+  padding:16px;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--font);
+  font-size:var(--fs-base);
+  line-height:1.45;
+}
+
+h1,h2,p,ul,table,figure{
+  margin:0;
+}
+
+/* --- focus ---------------------------------------------------------------- */
+
+/* Dotted inner ring as in classic widget sets. Negative offset so it lies
+   inside the element and shifts nothing. */
+a:focus,
+button:focus,
+input:focus,
+select:focus,
+summary:focus,
+[tabindex]:focus{
+  outline:1px dotted var(--ink);
+  outline-offset:-4px;
+}
+
+/* --- case: title bar, content, status bar --------------------------------- */
+
+.shell{
+  max-width:1100px;
+  margin:0 auto;
+}
+
+.titlebar{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:16px;
+  padding:6px 10px;
+  background:var(--panel);
+  border:2px solid;
+  border-color:var(--lit) var(--dim) var(--dim) var(--lit);
+}
+
+.titlebar h1{
+  font-size:var(--fs-title);
+  font-weight:bold;
+  text-transform:uppercase;
+  letter-spacing:var(--track);
+}
+
+main{
+  display:block;
+  margin-top:12px;
+}
+
+/* Raised like the title bar. Only surfaces you put or write something into are
+   recessed -- dropzone, fields, display, messages. Case stays case. */
+.statusbar{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  gap:16px;
+  margin-top:12px;
+  padding:5px 10px;
+  background:var(--panel);
+  color:var(--line);
+  letter-spacing:var(--track);
+  border:2px solid;
+  border-color:var(--lit) var(--dim) var(--dim) var(--lit);
+}
+
+/* Version left, source link centre, signature right. The centre only sits in
+   the centre when the outer two are equally wide, which "v0.1 beta" and
+   "piledge 2026" are not: they share the remainder in equal parts instead, the
+   right one right-aligned, so the link lands on the page centre. */
+.statusbar > .version,
+.statusbar > p:last-child{
+  flex:1 1 0;
+}
+
+.statusbar > p:last-child{
+  text-align:right;
+}
+
+.statusbar > .source{
+  flex:0 0 auto;
+}
+
+.version{
+  color:var(--line);
+  letter-spacing:var(--track);
+}
+
+/* Links in the case carry the case colour and nothing else: a permanent
+   underline stands out of the status bar and reads like a different typeface. */
+.statusbar a{
+  color:var(--line);
+  text-decoration:none;
+}
+
+.statusbar a:hover,
+.statusbar a:focus{
+  text-decoration:underline;
+}
+
+/* --- tabs for the test selection ------------------------------------------ */
+
+.tabs{
+  display:flex;
+  gap:4px;
+  margin-top:12px;
+}
+
+/* The tabs are <button> and take shape and bevel from there. The active one
+   uses the same bevel and offset as a pressed button, only permanent. */
+.tab[aria-checked="true"]{
+  background:var(--field);
+  border-color:var(--dim) var(--lit) var(--lit) var(--dim);
+  padding:6px 17px 4px 19px;
+}
+
+/* --- panels (fieldset / legend) ------------------------------------------- */
+
+.panel{
+  margin:0 0 12px 0;
+  padding:12px;
+  background:var(--panel);
+  border:2px solid;
+  border-color:var(--lit) var(--dim) var(--dim) var(--lit);
+  min-width:0;
+}
+
+.panel > legend{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 6px;
+  font-weight:bold;
+  text-transform:uppercase;
+  letter-spacing:var(--track);
+  color:var(--ink);
+}
+
+.num{
+  display:inline-block;
+  width:18px;
+  height:18px;
+  line-height:18px;
+  text-align:center;
+  background:var(--ink);
+  color:var(--lit);
+  font-weight:bold;
+  letter-spacing:0;
+}
+
+.panel:disabled{
+  color:var(--dim);
+}
+
+/* The legend sets its own colour above and would otherwise beat inheritance. */
+.panel:disabled > legend{
+  color:var(--dim);
+}
+
+/* Same for the secondary texts in step 5: hint and note set their own colour
+   and would otherwise stay at full strength in a disabled step. */
+.panel:disabled .result-hint,
+.panel:disabled .download-name{
+  color:var(--dim);
+}
+
+.panel:disabled .num{
+  background:var(--dim);
+  color:var(--panel);
+}
+
+/* --- two columns for steps 2 and 3 ---------------------------------------- */
+
+.cols{
+  display:block;
+}
+
+@media (min-width:900px){
+  .cols{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:12px;
+    /* Both columns equally tall. Otherwise each follows its own content and the
+       bottom edge sits up to 270 px apart depending on the test. */
+    align-items:stretch;
+  }
+  /* Step 2 is a column so its content gets the panel's full height instead of
+     hanging in the middle. #tt-params, #pa-params and #em-plates are siblings,
+     only one visible. :not([hidden]) is mandatory: a display rule without it
+     beats the browser's [hidden] rule and all three would stack. */
+  .cols > #step-2{
+    display:flex;
+    flex-direction:column;
+  }
+  .cols > #step-2 > div:not([hidden]){
+    display:flex;
+    flex-direction:column;
+    flex:1 1 auto;
+    min-height:0;
+  }
+}
+
+/* --- [1] template row and instruction ------------------------------------- */
+
+/* The row above the dropzone: template download plus a note, one row per test;
+   app.js shows and hides them via the test's panels list. The link stays
+   clickable while the fieldset is disabled -- a disabled fieldset blocks form
+   controls only, not links -- and the template is what you need before you have
+   a file.
+
+   All three rows must be exactly the same height, otherwise everything below
+   shifts when the tab changes. Two things ensure that:
+
+   Flexbox instead of a text line -- on the baseline, how far button and note
+   reach beyond the line height depends on the metrics of the font found; with
+   most of them the row came out 30.5 instead of 30 px tall.
+
+   And the stack: all three rows lie in the same grid cell, the hidden ones
+   still contribute their height. Without it the row would be two lines tall in
+   a narrow window only for the tests whose note wraps. */
+.template-row{
+  display:grid;
+  margin:0 0 10px;
+}
+
+.template-line{
+  grid-area:1 / 1;
+  display:flex;
+  align-items:center;
+  margin:0;
+  min-height:30px;
+}
+
+/* visibility instead of display: a display:none element has no height. The
+   browser's [hidden] rule has to be taken back explicitly for that. */
+.template-line[hidden]{
+  display:flex;
+  visibility:hidden;
+}
+
+/* Fixed line height instead of `normal`: makes the button 20 + 2x3 padding +
+   2x2 border = 30 px tall in every font, so it can never pull the row taller. */
+.template-line .fake-btn{
+  line-height:20px;
+}
+
+.template-note{
+  margin-left:10px;
+  color:var(--line);
+  font-size:var(--fs-small);
+}
+
+/* Same stack as in the template row (the class serves step 5 too): all three
+   versions lie in one grid cell, the visible one gives the content, the hidden
+   ones give the height. The cell is thus always as tall as the longest text --
+   at every window width, without a guessed number of reserved lines. */
+.step-hint{
+  display:grid;
+  margin:0 0 10px;
+}
+
+.step-hint > .hint{
+  grid-area:1 / 1;
+  margin:0;               /* the gap below belongs to the stack */
+  color:var(--line);
+}
+
+.step-hint > .hint[hidden]{
+  display:block;
+  visibility:hidden;
+}
+
+/* --- [1] dropzone --------------------------------------------------------- */
+
+/* The box takes the drop and carries the frame; the prompt inside it carries
+   the padding, so the clickable area stays what it always was.
+
+   The height is fixed at what the box needs with a full list: compact prompt,
+   caption and five rows. A growing history thus never pushes the steps down. */
+.dropzone{
+  display:flex;
+  flex-direction:column;
+  height:calc(4px                              /* its own bevel */
+              + var(--drop-prompt-h)
+              + 2px + 4px + 6px                /* the list's rule and padding */
+              + var(--hist-head-h) + var(--hist-gap)
+              + 5 * var(--hist-row-h));
+  background:var(--field);
+  border:2px solid;
+  border-color:var(--dim) var(--lit) var(--lit) var(--dim);
+}
+
+/* Takes what the list leaves: the whole box while the history is empty, one
+   line once it is not. */
+.drop-prompt{
+  flex:1 1 auto;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  padding:12px;
+  text-align:center;
+  cursor:pointer;
+}
+
+/* While a file hovers over it (app.js sets `is-over`). The lighter ground alone
+   was too little to see, so the solid dark edge comes on top. */
+.dropzone.is-over{
+  background:var(--lit);
+  border-color:var(--ink) var(--ink) var(--ink) var(--ink);
+}
+
+.drop-main{
+  text-transform:uppercase;
+  letter-spacing:var(--track);
+}
+
+.drop-sub{
+  color:var(--line);
+}
+
+.drop-browse{
+  margin-top:10px;
+}
+
+/* Once the list is there the prompt makes room for it (app.js sets
+   `has-history` on the <body>). It stays fully operable -- drop, click,
+   keyboard -- but shrinks to one line. */
+.has-history .drop-prompt{
+  flex-direction:row;
+  gap:14px;
+  padding:6px 12px;
+}
+
+.has-history .drop-sub{
+  display:none;
+}
+
+.has-history .drop-browse{
+  margin-top:0;
+}
+
+/* The last few files, in the same box as the drop prompt -- the upload area
+   doubles as their folder. */
+.history-box{
+  flex:0 0 auto;
+  border-top:2px solid var(--dim);
+  padding:4px 10px 6px;
+  text-align:left;
+}
+
+.history-head{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  height:var(--hist-head-h);
+  margin:0 0 var(--hist-gap);
+  color:var(--line);
+  font-size:var(--fs-small);
+  text-transform:uppercase;
+  letter-spacing:var(--track);
+}
+
+/* Always five slots, filled or not: one more file must not make the box grow. */
+.history-list{
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+
+.history-list > li{
+  height:var(--hist-row-h);
+}
+
+/* One row per file. The name is cut with an ellipsis: sliced file names run to
+   60 characters and would otherwise wrap, growing the box by a line. */
+.history-item{
+  display:flex;
+  align-items:baseline;
+  gap:10px;
+  width:100%;
+  height:100%;
+  padding:1px 4px;
+  background:none;
+  border:0;
+  color:inherit;
+  font:inherit;
+  /* The global button rule sets these; a file name has to stay readable. */
+  text-transform:none;
+  letter-spacing:0;
+  text-align:left;
+  cursor:pointer;
+}
+
+.history-item:hover,
+.history-item:focus-visible{
+  background:var(--lit);
+}
+
+.history-name{
+  flex:1 1 auto;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+.history-size{
+  flex:0 0 auto;
+  color:var(--line);
+  font-size:var(--fs-small);
+}
+
+/* Looks like a button, is none: "Browse..." is a <span> (the click belongs to
+   the whole dropzone), "Download template" an <a>. */
+.fake-btn{
+  display:inline-block;
+  padding:3px 14px;
+  background:var(--panel);
+  text-transform:uppercase;
+  letter-spacing:var(--track);
+  border:2px solid;
+  border-color:var(--lit) var(--dim) var(--dim) var(--lit);
+}
+
+a.fake-btn{
+  color:var(--ink);
+  text-decoration:none;
+}
+
+/* --- [1] file name, summary, settings table ------------------------------- */
+
+/* Both keep their line whether they say anything or not, so step 1 is the same
+   height before and after a file is read. */
+.file-name{
+  min-height:1.45em;   /* for browsers without the lh unit */
+  min-height:1lh;
+  margin-top:8px;
+  font-weight:bold;
+}
+
+.summary{
+  min-height:1.45em;
+  min-height:1lh;
+  margin-top:2px;
+  color:var(--line);
+}
+
+#settings-details{
+  margin-top:10px;
+  background:var(--panel);
+}
+
+#settings-details > summary{
+  cursor:pointer;
+  padding:2px 0;
+  text-transform:uppercase;
+  letter-spacing:var(--track);
+}
+
+.table-wrap{
+  margin-top:6px;
+  max-height:260px;
+  overflow:auto;
+  background:var(--field);
+  border:2px solid;
+  border-color:var(--dim) var(--lit) var(--lit) var(--dim);
+}
+
+.settings-table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:var(--fs-small);
+}
+
+.settings-table th,
+.settings-table td{
+  padding:2px 8px;
+  text-align:left;
+  vertical-align:top;
+  border-bottom:1px solid var(--dim);
+  word-break:break-all;
+}
+
+.settings-table th{
+  position:sticky;
+  top:0;
+  background:var(--panel);
+  text-transform:uppercase;
+  letter-spacing:var(--track);
+  border-bottom:2px solid var(--line);
+}
+
+/* Third column is the source ("printer", "filament", ...) -- short enough not
+   to need the mid-word break the values next to it get. */
+.settings-table td:nth-child(3){
+  color:var(--line);
+  white-space:nowrap;
+  word-break:normal;
+}
+
+/* --- [2] field rows ------------------------------------------------------- */
+
+.field-row{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:8px;
+}
+
+.field-row > label{
+  flex:1 1 auto;
+  min-width:0;
+}
+
+/* On a checkbox the label sits tight to the box instead of filling the row. */
+.check-row{
+  gap:8px;
+}
+
+.check-row > label{
+  flex:0 1 auto;
+}
+
+/* The reset button sits top right, before the fields: that way its position
+   does not depend on their number -- two for the tower up to six for the PA
+   test -- and does not jump when the tab changes.
+   Must stand after .field-row: same specificity, order decides. */
+.reset-row{
+  justify-content:flex-end;
+  margin-bottom:12px;
+}
+
+/* --- controls ------------------------------------------------------------- */
+
+input[type="number"],
+input[type="text"],
+select{
+  font-family:var(--font);
+  font-size:var(--fs-base);
+  color:var(--ink);
+  background:var(--field);
+  padding:2px 6px;
+  border:2px solid;
+  border-color:var(--dim) var(--lit) var(--lit) var(--dim);
+}
+
+/* Without this the browser puts its own shape on the field and the bevel
+   disappears. */
+input[type="number"],
+input[type="text"]{
+  -webkit-appearance:none;
+  appearance:none;
+}
+
+.num-input{
+  /* 13ch: four decimal places (0.0025) have to stay fully visible - Firefox
+     takes about 30 px of the inner space for the spinner arrows. */
+  width:13ch;
+  text-align:right;
+}
+
+select{
+  width:18ch;
+}
+
+input:disabled,
+select:disabled{
+  background:var(--panel);
+  color:var(--dim);
+  cursor:not-allowed;
+}
+
+input[type="checkbox"]{
+  width:14px;
+  height:14px;
+  margin:0;
+  accent-color:var(--line);
+}
+
+/* A field whose value triggered an error message: border colour only -- same
+   two pixels, same padding, same height, nothing shifts. Losing the bevel is
+   the signal. The selector has to name the element: input[type="number"] above
+   is as specific as a bare class would be and would keep its bevel colours.
+   For the same reason this rule stands at the back. */
+input.is-bad,
+select.is-bad{
+  border-color:var(--alarm);
+}
+
+/* --- buttons -------------------------------------------------------------- */
+
+button{
+  font-family:var(--font);
+  font-size:var(--fs-base);
+  text-transform:uppercase;
+  letter-spacing:var(--track);
+  color:var(--ink);
+  background:var(--panel);
+  padding:5px 18px;
+  border:2px solid;
+  border-color:var(--lit) var(--dim) var(--dim) var(--lit);
+  cursor:pointer;
+}
+
+/* Pressed: bevel colours swapped and one pixel of offset down and right, via
+   padding instead of a transform -- the edge stays sharp. */
+button:active:not(:disabled){
+  border-color:var(--dim) var(--lit) var(--lit) var(--dim);
+  padding:6px 17px 4px 19px;
+}
+
+.btn-small{
+  font-size:var(--fs-small);
+  padding:3px 12px;
+}
+
+.btn-small:active:not(:disabled){
+  padding:4px 11px 2px 13px;
+}
+
+button:disabled{
+  color:var(--dim);
+  background:var(--panel);
+  border:2px dotted var(--dim);
+  cursor:not-allowed;
+}
+
+/* --- [3] preview ---------------------------------------------------------- */
+
+.screen{
+  display:block;
+  padding:6px;
+  background:var(--screen);
+  border:2px solid;
+  border-color:var(--dim) var(--lit) var(--lit) var(--dim);
+}
+
+#preview-canvas{
+  display:block;
+  width:100%;
+  height:auto;
+  background:var(--screen);
+}
+
+/* Clickable only when there is something to pick -- app.js sets and removes
+   the tabindex together with step 5. */
+#preview-canvas[tabindex]{
+  cursor:pointer;
+}
+
+/* The shared focus ring is --ink and would be invisible on the dark screen.
+   Same stroke and negative offset, only recoloured. */
+#preview-canvas:focus{
+  outline-color:var(--trace);
+}
+
+.preview-info{
+  margin-top:6px;
+  color:var(--line);
+  /* Always two lines tall. The text runs to one or two lines depending on the
+     file; without the reserve step 3 grows with it and the preview jumps. Both
+     values come from the same number so they cannot drift apart. */
+  --info-line:1.45;
+  line-height:var(--info-line);
+  min-height:calc(2em * var(--info-line));
+}
+
+/* Disabled, the screen is dark grey instead of black. Border and canvas both
+   have to be recoloured -- the canvas covers the middle. */
+.panel:disabled .screen,
+.panel:disabled #preview-canvas{
+  background:var(--dim);
+}
+
+/* --- messages ------------------------------------------------------------- */
+
+/* Fixed height. Without it the list follows its content -- measured 0 to 202 px
+   for zero to four messages -- and everything below down to the status bar
+   jumps by that amount on every tab change.
+
+   Four lines are reserved: that is the most messages that come together, and
+   since every text is trimmed to at most 85 characters each stays on one line
+   up to about 900 px window width. Anything beyond scrolls inside. The
+   scrollbar gutter stands even when there is none, otherwise the text width
+   changes with it and the lines wrap differently. The window is never empty:
+   app.js writes "no messages" into it. */
+.messages{
+  --msg-line:1.45;
+  list-style:none;
+  margin:0 0 12px 0;
+  padding:5px 10px;
+  height:calc(4em * var(--msg-line) + 14px);
+  overflow-y:auto;
+  scrollbar-gutter:stable;
+  line-height:var(--msg-line);
+  background:var(--field);
+  border:2px solid;
+  border-color:var(--dim) var(--lit) var(--lit) var(--dim);
+}
+
+/* Glyph and text side by side instead of a list marker: the glyph keeps its
+   column, the text does not wrap under it. No border per message -- it cost
+   twelve pixels of height each, which in a fixed window go to the text. */
+.messages li{
+  display:flex;
+  gap:10px;
+}
+
+.messages li::before{
+  flex:0 0 auto;
+  font-weight:bold;
+  width:1.2ch;
+  text-align:center;
+}
+
+/* "!" for errors, "i" for hints: colour is never the only carrier of the
+   information. "no messages" carries no glyph and therefore no ::before. */
+.msg-none{
+  color:var(--dim);
+}
+
+.msg-error{
+  color:var(--alarm);
+}
+
+.msg-error::before{
+  content:"!";
+  color:var(--alarm);
+}
+
+.msg-warn{
+  color:var(--amber);
+}
+
+.msg-warn::before{
+  content:"i";
+  color:var(--amber);
+}
+
+/* --- [4] download --------------------------------------------------------- */
+
+.download-row{
+  display:flex;
+  align-items:center;
+  gap:14px;
+}
+
+/* The generated file name carries the user's profile names and is arbitrarily
+   long. Wrapping would let step 4 grow by a line depending on the test, so it
+   stays on one line and is clipped; the title holds it in full. #best-info in
+   step 5 uses the same class for the same reason. */
+.download-name{
+  color:var(--line);
+  flex:1 1 0;
+  min-width:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+/* --- [5] result ----------------------------------------------------------- */
+
+/* As wide as the number fields in step 2 -- otherwise the general select rule
+   above would pull it to 18ch. */
+#best-value{
+  width:13ch;
+}
+
+/* The label reads "Best line", "Best plate" or "Best band" depending on the
+   test. Sized to its text, the field wanders half a character per extra letter
+   -- "Best plate" pushed it 4 px right in the EM test. Fixed base of nine
+   characters, the length of the two shorter labels; the box still grows beyond
+   that, so nothing is clipped. */
+#best-label{
+  flex-basis:9ch;
+}
+
+/* Different line count per test -- two for PA, three for EM, four for the
+   tower -- so four are reserved: otherwise the step grows on a tab change and
+   the status bar jumps. Line height and reserve come from the same number;
+   `white-space:pre` keeps the lines unbroken in a narrow window, so the count
+   stays fixed. Only below about 760 px does the scrollbar add height. */
+.code-out{
+  --out-line:1.6;
+  margin:10px 0;
+  padding:8px 10px;
+  min-height:calc(4em * var(--out-line) + 20px);
+  background:var(--screen);
+  color:var(--trace);
+  border:2px solid;
+  border-color:var(--dim) var(--lit) var(--lit) var(--dim);
+  font:var(--fs-base)/var(--out-line) var(--font);
+  white-space:pre;
+  overflow-x:auto;
+}
+
+/* --- utilities ------------------------------------------------------------ */
+
+/* Screen-reader-only labels, and #file-input behind the dropzone. */
+.visually-hidden{
+  position:absolute;
+  width:1px;
+  height:1px;
+  margin:-1px;
+  padding:0;
+  overflow:hidden;
+  clip:rect(0 0 0 0);
+  clip-path:inset(50%);
+  white-space:nowrap;
+  border:0;
+}

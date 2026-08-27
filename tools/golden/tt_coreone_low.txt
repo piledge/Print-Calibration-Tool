@@ -1,0 +1,30 @@
+source        10mm_temperature_tower_0.4n_0.25mm_PLA_COREONE_2h20m.bgcode
+range         180 ... 195 C  (bands 1-4)
+flavor        marlin2 relative-E
+source tower  21 bands, 10.000 mm each, 210.70 mm, 843 layers
+base          0.700 mm, z offset 0.000 mm
+printed       163 layers, 40.700 mm
+lines         233914 -> 47824
+time          28 min (31 min silent)
+filament      2755.79 mm = 6.63 cm3
+stripped temp 1
+
+band  temp  source Z            print Z             layers
+   1  180  0.950-10.700        0.950-10.700        3-42
+   2  185  10.950-20.700       10.950-20.700       43-82
+   3  190  20.950-30.700       20.950-30.700       83-122
+   4  195  30.950-40.700       30.950-40.700       123-162
+
+; >>> print_calibration_tool tt map begin
+; tt model = temperature tower, 21 bands, 10.000 mm each
+; tt printed = 180 ... 195 C, bands 1-4
+; tt base = 3 layers up to Z 0.700, source layers 0-2, last one repeated 0x
+; tt z offset = 0 mm
+; tt top cap = 4 layers, source layers 839-842
+; tt band 1 | 180 C | source Z 0.950-10.700 | print Z 0.950-10.700 | layers 3-42
+; tt band 2 | 185 C | source Z 10.950-20.700 | print Z 10.950-20.700 | layers 43-82
+; tt band 3 | 190 C | source Z 20.950-30.700 | print Z 20.950-30.700 | layers 83-122
+; tt band 4 | 195 C | source Z 30.950-40.700 | print Z 30.950-40.700 | layers 123-162
+; <<< print_calibration_tool tt map end
+
+sha256        8181eb9a4fa10566202ef14bd6fba0b0e6f42fc30a82807fba724bea99d5aee6

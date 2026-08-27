@@ -1,0 +1,25 @@
+name: tests
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test_all:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      # Nothing to install: the tool has no dependencies, and the test suite
+      # needs only node and the python3 that is on the runner anyway.
+      #
+      # The sliced sample prints under References/ are not in the repository,
+      # so the suite runs the golden-file checks, the shared constants and the
+      # unit cases and reports which sections it had to skip.
+      - run: sh tools/test_all.sh

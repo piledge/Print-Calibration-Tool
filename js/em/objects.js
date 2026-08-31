@@ -63,10 +63,12 @@ function valueFromName(name) {
   return m ? parseFloat(m[1] + '.' + m[2]) : null;
 }
 
-function newObject(id, name, token) {
+function newObject(id, name) {
   return {
-    id, name, token,
+    id, name,
     value: null, factor: null, skip: true, reason: 'noname',
+    // Klipper only: line of the EXCLUDE_OBJECT_DEFINE, -1 when there is none.
+    defLine: -1,
     minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity,
     cx: NaN, cy: NaN, eIn: 0, blocks: 0,
   };
@@ -111,12 +113,7 @@ export function findObjects(raw, doc) {
     spanHasExtrusion = false;
   };
   const closeSpan = () => openSpan(-1);
-  // Name unquoted, token verbatim: the generator builds the cancel command from
-  // the token.
-  const nameObject = (idx, token) => {
-    objects[idx].name = unquote(token);
-    objects[idx].token = token;
-  };
+  const nameObject = (idx, token) => { objects[idx].name = unquote(token); };
   // Klipper: DEFINE and START carry the same name; whichever comes first creates.
   const klipperObject = token => {
     const name = unquote(token);
@@ -124,7 +121,7 @@ export function findObjects(raw, doc) {
     if (idx === undefined) {
       idx = objects.length;
       byKey.set(name, idx);
-      objects.push(newObject(nextId++, name, token));
+      objects.push(newObject(nextId++, name));
     }
     return idx;
   };
@@ -154,7 +151,7 @@ export function findObjects(raw, doc) {
       if (idx === undefined) {
         idx = objects.length;
         byKey.set(id, idx);
-        objects.push(newObject(id, '', ''));
+        objects.push(newObject(id, ''));
       }
       openSpan(idx);
       curMark = marks.length;
@@ -176,7 +173,7 @@ export function findObjects(raw, doc) {
     m = XO_DEF.exec(t);
     if (m) {
       flavor = flavor || 'klipper';
-      klipperObject(m[1]);
+      objects[klipperObject(m[1])].defLine = i;
       declEnd = i;
       continue;
     }

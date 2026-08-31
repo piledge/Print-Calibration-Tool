@@ -7,7 +7,7 @@ lines         283866 -> 57978 (+105 inserted, -225993 dropped, 31943 E values ch
 time          44 min
 extrusion     53771.89 -> 10294.15 mm inside objects
 filament      10311.15 mm = 24.80 cm3
-sha256        d6025a6688de56170bf0ad834dffa6452e524c44c314b6a31ea6cdfe1435504f
+sha256        41480e73db91cb70c58e78271f99b67c4b0382e1e843f20c9244ef1664a83adb
 
 --- inserted block ---
 ; >>> print_calibration_tool em map begin

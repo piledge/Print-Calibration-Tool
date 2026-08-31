@@ -80,6 +80,8 @@ TRAVEL_RE = re.compile(r"^G[0-3](?![0-9])(?![^;]*\sE-?[\d.])[^;]*[XY]-?[\d.]")
 XY_TOKEN_RE = re.compile(r"(?<=[XY])-?(?:\d+(?:\.\d*)?|\.\d+)")
 M486_P_RE = re.compile(r"^M486\s+P(-?\d+)\s*$")
 EXCLUDE_OBJ_RE = re.compile(r"^EXCLUDE_OBJECT\s+NAME=(\S+)\s*$")
+# Prusa mesh bed levelling area, written by the slicer from the whole plate.
+M555_RE = re.compile(r"^M555(?=\s|$)", re.I)
 
 # In the command part a bare occurrence is enough; in comments a word boundary
 # is required so base64 thumbnails do not trip the check.
@@ -665,9 +667,14 @@ def check_object_segmentation(ctx):
 
     src_decl = [(i, src.objects[i].name) for i in src.order]
     out_decl = [(i, out.objects[i].name) for i in out.order]
-    if src_decl != out_decl:
+    # Klipper: the declaration of a removed plate is cut out with it, otherwise
+    # the adaptive bed mesh keeps probing the empty spot. With M486 they all
+    # stay -- there the object numbering hangs off them.
+    want_decl = src_decl if src.marlin_markers \
+        else [d for d in src_decl if d[0] in keep]
+    if want_decl != out_decl:
         problems.append((0, "object declarations differ (%d vs %d)"
-                         % (len(src_decl), len(out_decl))))
+                         % (len(want_decl), len(out_decl))))
 
     want_seq = [oid for oid, _, _ in src.blocks if oid in keep]
     out_seq = [oid for oid, _, _ in out.blocks]
@@ -689,8 +696,8 @@ def check_object_segmentation(ctx):
     if problems:
         return result.fail("%d problem(s) in the object structure" % len(problems),
                            problems)
-    return result.ok("%d objects declared, %d of %d blocks kept, same order"
-                     % (len(src.order), len(out_seq), len(src.blocks)))
+    return result.ok("%d of %d objects declared, %d of %d blocks kept, same order"
+                     % (len(out_decl), len(src.order), len(out_seq), len(src.blocks)))
 
 
 def check_flow_per_object(ctx):
@@ -795,16 +802,24 @@ def check_follows_source(ctx):
     # look the same ("M486 S0" / "M486 A0.850") but belong to no block and stay
     # -- with M486 the object numbers hang on them. The boundary is the last
     # declaration line.
-    decl_end = -1
-    for i, line in enumerate(src.lines):
-        t = line.strip()
-        if M486_A_RE.match(t) or DEFINE_RE.match(t):
-            decl_end = i
     names = {}
     for oid in src.order:
         info = src.objects.get(oid)
         if info is not None and info.name:
             names[info.name] = oid
+    decl_end = -1
+    for i, line in enumerate(src.lines):
+        t = line.strip()
+        m = DEFINE_RE.match(t)
+        if m:
+            decl_end = i
+            # Klipper: the declaration falls with its plate, so that the
+            # adaptive bed mesh only covers what is really printed.
+            oid = names.get(m.group(1).strip("'\""))
+            if oid is not None and oid not in keep:
+                cut[i] = 1
+        elif M486_A_RE.match(t):
+            decl_end = i
     for i in range(decl_end + 1, len(src.lines)):
         t = src.lines[i].strip()
         m = OBJ_START_RE.match(t)
@@ -874,6 +889,8 @@ def lines_match(ctx, idx, src_line, out_line):
         return True
     if TIME_RE.match(a) and TIME_RE.match(b):
         return True
+    if M555_RE.match(a) and M555_RE.match(b):
+        return True          # probe area, checked in full by check 13
     if TRAVEL_RE.match(a) and TRAVEL_RE.match(b):
         if XY_TOKEN_RE.sub("*", a) == XY_TOKEN_RE.sub("*", b):
             return True
@@ -882,9 +899,10 @@ def lines_match(ctx, idx, src_line, out_line):
 
 
 def check_skip_commands(ctx):
-    """6) Exactly one cancel command per removed object, none otherwise. Its
-    toolpaths are gone but its declaration stays -- without the command it
-    would sit in the printer's object list until the end."""
+    """6) With M486 exactly one cancel command per removed object, none
+    otherwise: its toolpaths are gone but its declaration stays, and without the
+    command it would sit in the printer's object list until the end. Klipper
+    cuts the declaration out instead, so there no command may be left."""
     result = Result("cancel commands")
     if not ctx.map.found:
         return result.skip(NO_MAP)
@@ -898,18 +916,13 @@ def check_skip_commands(ctx):
 
     wanted = set()
     for entry in skipped:
-        info = ctx.source.objects.get(entry.id)
-        if marlin:
-            want = entry.id
-            label = "M486 P%d" % want
-        else:
-            want = info.token if info else None
-            label = "EXCLUDE_OBJECT NAME=%s" % want
-        wanted.add(want)
-        count = issued.count(want)
+        if not marlin:
+            continue
+        wanted.add(entry.id)
+        count = issued.count(entry.id)
         if count != 1:
-            problems.append((0, "object %d: %d occurrences of '%s', expected 1"
-                             % (entry.id, count, label)))
+            problems.append((0, "object %d: %d occurrences of 'M486 P%d', expected 1"
+                             % (entry.id, count, entry.id)))
 
     for lineno, value in ctx.map.skip_commands:
         if value not in wanted:
@@ -926,6 +939,9 @@ def check_skip_commands(ctx):
                            problems)
     if not skipped:
         return result.ok("nothing removed, no cancel commands emitted")
+    if not marlin:
+        return result.ok("%d removed plate(s), declarations cut out, no command needed"
+                         % len(skipped))
     return result.ok("%d removed object(s), one command each" % len(skipped))
 
 
@@ -1156,6 +1172,104 @@ def check_travel_between_objects(ctx):
                      % (len(out), worst_out, worst_src))
 
 
+def m555_rect(lines):
+    """The rectangle of the first real M555, as (x0, y0, x1, y1)."""
+    for line in lines:
+        t = line.strip()
+        if not t or t[0] == ";" or not M555_RE.match(t):
+            continue
+        cmd = command_part(line)
+        vals = {}
+        for letter in "XYWH":
+            match = re.search(r"(?:^|\s)%s(-?(?:\d+(?:\.\d*)?|\.\d+))" % letter, cmd)
+            if match:
+                vals[letter] = float(match.group(1))
+        if len(vals) == 4 and vals["W"] > 0 and vals["H"] > 0:
+            return (vals["X"], vals["Y"], vals["X"] + vals["W"], vals["Y"] + vals["H"])
+    return None
+
+
+def objects_bbox(scan, ids):
+    """Bounding box of the extruding moves of the given objects."""
+    box = None
+    for oid in ids:
+        info = scan.objects.get(oid)
+        if info is None or info.min_x is None:
+            continue
+        if box is None:
+            box = [info.min_x, info.min_y, info.max_x, info.max_y]
+            continue
+        box[0] = min(box[0], info.min_x)
+        box[1] = min(box[1], info.min_y)
+        box[2] = max(box[2], info.max_x)
+        box[3] = max(box[3], info.max_y)
+    return tuple(box) if box else None
+
+
+def check_probe_area(ctx):
+    """13) The printer only probes where something is printed. Klipper derives
+    the area from the EXCLUDE_OBJECT_DEFINE list, Prusa from M555 in the start
+    block -- in the source both describe the whole plate."""
+    result = Result("probe area")
+    if not ctx.map.found:
+        return result.skip(NO_MAP)
+    src, out = ctx.source, ctx.output
+    keep = {e.id for e in ctx.map.entries if e.printed}
+    tol = 0.002
+    problems = []
+    notes = []
+
+    if not src.marlin_markers:
+        by_name = {info.name: oid for oid, info in src.objects.items()}
+        for idx, line in enumerate(out.lines):
+            match = DEFINE_RE.match(line.strip())
+            if not match:
+                continue
+            oid = by_name.get(match.group(1).strip("'\""))
+            if oid is not None and oid not in keep and len(problems) < 10:
+                problems.append((idx + 1, "declaration of the removed plate %s is still there"
+                                 % match.group(1)))
+        notes.append("%d of %d plates declared" % (len(keep), len(ctx.map.entries)))
+
+    src_rect = m555_rect(src.lines)
+    if src_rect is None:
+        notes.append("no M555 in the source")
+    else:
+        out_rect = m555_rect(out.lines)
+        box = objects_bbox(out, keep)
+        if out_rect is None:
+            problems.append((0, "the source has an M555, the output has none"))
+        elif box is None:
+            problems.append((0, "no printed object to measure the area against"))
+        else:
+            # Never wider than what the slicer allowed ...
+            for k, name in enumerate(("left", "bottom")):
+                if out_rect[k] < src_rect[k] - tol:
+                    problems.append((0, "M555 reaches %.3f mm further %s than the source's"
+                                     % (src_rect[k] - out_rect[k], name)))
+            for k, name in ((2, "right"), (3, "top")):
+                if out_rect[k] > src_rect[k] + tol:
+                    problems.append((0, "M555 reaches %.3f mm further %s than the source's"
+                                     % (out_rect[k] - src_rect[k], name)))
+            # ... and never smaller than what is printed inside it.
+            want = (max(box[0], src_rect[0]), max(box[1], src_rect[1]),
+                    min(box[2], src_rect[2]), min(box[3], src_rect[3]))
+            if out_rect[0] > want[0] + tol or out_rect[1] > want[1] + tol \
+                    or out_rect[2] < want[2] - tol or out_rect[3] < want[3] - tol:
+                problems.append((0, "M555 %.1f/%.1f..%.1f/%.1f does not cover the printed "
+                                    "plates %.1f/%.1f..%.1f/%.1f"
+                                 % (out_rect + want)))
+            src_area = (src_rect[2] - src_rect[0]) * (src_rect[3] - src_rect[1])
+            out_area = (out_rect[2] - out_rect[0]) * (out_rect[3] - out_rect[1])
+            notes.append("M555 %.0f -> %.0f mm2 (%.0f%%)"
+                         % (src_area, out_area,
+                            100.0 * out_area / src_area if src_area else 100.0))
+
+    if problems:
+        return result.fail("%d problem(s) with the probe area" % len(problems), problems)
+    return result.ok(", ".join(notes) if notes else "nothing to check")
+
+
 CHECKS = (
     check_map_header,
     check_object_segmentation,
@@ -1169,12 +1283,27 @@ CHECKS = (
     check_effectiveness,
     check_progress,
     check_travel_between_objects,
+    check_probe_area,
 )
 
 
 # ---------------------------------------------------------------------------
 # Context
 # ---------------------------------------------------------------------------
+
+def realign_klipper_ids(src, out):
+    by_name = {info.name: oid for oid, info in src.objects.items()}
+    remap = {}
+    objects = {}
+    for oid, info in out.objects.items():
+        new = by_name.get(info.name, oid)
+        remap[oid] = new
+        info.id = new
+        objects[new] = info
+    out.objects = objects
+    out.order = [remap.get(o, o) for o in out.order]
+    out.blocks = [(remap.get(o, o), a, b) for o, a, b in out.blocks]
+
 
 class Context:
     """Bundles both files and the helper data derived from them."""
@@ -1183,6 +1312,11 @@ class Context:
         self.source = source
         self.output = output
         self.map = EmMap(output)
+        # Klipper addresses objects by name and the ids here are the position of
+        # the declaration. The output no longer declares the removed plates, so
+        # its numbering would run against the source's -- re-key it by name.
+        if not source.marlin_markers:
+            realign_klipper_ids(source, output)
         self.source_skip_commands = []
         for idx, line in enumerate(source.lines):
             if line.startswith("M486 P") or line.startswith("EXCLUDE_OBJECT "):

@@ -90,6 +90,70 @@ export function formatCoord(v) {
   return s;
 }
 
+/* --- Probe area ------------------------------------------------------------
+   M555 is the rectangle Prusa firmware probes before the print. PrusaSlicer
+   computes it while slicing, from the first layer's bounding box, so it is
+   wrong as soon as the print changes: too large when plates are cut out of the
+   EM plate, too small when the PA pattern lands somewhere else than the model
+   that was sliced. Klipper has no equivalent -- there the area follows the
+   EXCLUDE_OBJECT declarations, which both tests already rewrite.
+
+   The slicer's formula is not reproduced: it is profile specific and clamps
+   against the bed. Instead the margins it left around its own print are
+   measured and applied to the new one. Two guards keep that honest when the
+   measurement is not: a negative margin (the rectangle did not contain the
+   print it belonged to, as in a truncated file) counts as zero, and the result
+   never covers ground that neither the old rectangle nor the new print already
+   covered. Without the second rule a nonsensical margin would grow the area
+   over the whole bed. */
+
+const M555_RE = /^M555(?=\s|$)/i;
+
+/**
+ * @param {string[]} lines  edited in place
+ * @param {?object} was   {x0,y0,x1,y1} what the rectangle in the file belongs
+ *   to; null when it cannot be measured, then no margins are carried over
+ * @param {object} now    {x0,y0,x1,y1} what is printed instead
+ * @param {?object} bounds  {x0,y0,x1,y1} the result stays inside, null = bed unknown
+ * @returns {number} how many M555 lines were rewritten
+ */
+export function rewriteProbeArea(lines, was, now, bounds) {
+  if (!now) return 0;
+  const b = bounds || { x0: -Infinity, y0: -Infinity, x1: Infinity, y1: Infinity };
+  let n = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const t = lines[i].trim();
+    // The config block at the end of a slicer file quotes the unevaluated start
+    // gcode, M555 placeholder included -- comments stay comments.
+    if (t === '' || t.charAt(0) === ';' || !M555_RE.test(t)) continue;
+    const semi = lines[i].indexOf(';');
+    const code = semi < 0 ? lines[i] : lines[i].slice(0, semi);
+    const x = axisValue(code, 'X'), y = axisValue(code, 'Y');
+    const w = axisValue(code, 'W'), h = axisValue(code, 'H');
+    if (x === null || y === null || !(w > 0) || !(h > 0)) continue;
+    const ml = was ? Math.max(0, was.x0 - x) : 0;
+    const mb = was ? Math.max(0, was.y0 - y) : 0;
+    const mr = was ? Math.max(0, x + w - was.x1) : 0;
+    const mt = was ? Math.max(0, y + h - was.y1) : 0;
+    // Read from the inside out: the print itself, then the margin, then what
+    // was covered before, then the bed -- and never so far in that the print
+    // would stick out again.
+    const nx0 = Math.min(now.x0, Math.max(b.x0, Math.min(x, now.x0), now.x0 - ml));
+    const ny0 = Math.min(now.y0, Math.max(b.y0, Math.min(y, now.y0), now.y0 - mb));
+    const nx1 = Math.max(now.x1, Math.min(b.x1, Math.max(x + w, now.x1), now.x1 + mr));
+    const ny1 = Math.max(now.y1, Math.min(b.y1, Math.max(y + h, now.y1), now.y1 + mt));
+    if (!(nx1 > nx0) || !(ny1 > ny0)) continue;
+    let next = setAxis(code, 'X', formatCoord(nx0));
+    next = setAxis(next, 'Y', formatCoord(ny0));
+    next = setAxis(next, 'W', formatCoord(nx1 - nx0));
+    next = setAxis(next, 'H', formatCoord(ny1 - ny0));
+    if (next === code) continue;
+    lines[i] = next + (semi < 0 ? '' : lines[i].slice(semi));
+    n++;
+  }
+  return n;
+}
+
 /** Seconds -> "1h 52m 0s", exactly PrusaSlicer's notation. */
 export function formatDuration(sec) {
   const t = Math.max(0, Math.round(sec));

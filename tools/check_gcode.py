@@ -53,6 +53,11 @@ HEADER_KEYS = (
     "print_numbers", "gcode_flavor", "acceleration_print", "acceleration_first_layer",
 )
 HEADER_LINE_RE = re.compile(r"^;\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$")
+# The two ways a printer learns which area to probe: Prusa reads M555, klipper
+# the object definitions. Both describe the sliced model until the generator
+# rewrites them for the pattern.
+M555_RE = re.compile(r"^M555(?=\s|$)", re.I)
+XO_DEFINE_RE = re.compile(r"^EXCLUDE_OBJECT_DEFINE\b(.*)$", re.I)
 
 THUMB_BEGIN_RE  = re.compile(r"^;\s*(thumbnail(?:_[A-Za-z0-9]+)?)\s+begin\s+(\d+)x(\d+)\s+(\d+)\s*$", re.I)
 THUMB_END_RE    = re.compile(r"^;\s*thumbnail(?:_[A-Za-z0-9]+)?\s+end\b", re.I)
@@ -1051,6 +1056,90 @@ def check_thumbnails(doc, cfg):
     return res.ok("%d thumbnail(s), %s" % (len(found), _spec_text(found)))
 
 
+def check_probe_area(doc, cfg):
+    """15) The area the printer probes covers the whole pattern.
+
+    Prusa firmware takes it from M555 and only extrapolates outside it; klipper
+    derives it from the object definitions. Both describe the model that was
+    sliced, which has nothing to do with where the pattern lands, so the
+    generator rewrites whichever of the two the file carries.
+    """
+    res = Result("probe area")
+    rect = None
+    source = None
+    polygons = []
+    for raw in doc.lines:
+        stripped = raw.strip()
+        if not stripped or stripped.startswith(";"):
+            continue
+        match = XO_DEFINE_RE.match(stripped)
+        if match:
+            pairs = re.findall(r"\[\s*(-?[\d.]+)\s*,\s*(-?[\d.]+)\s*\]", match.group(1))
+            if pairs:
+                polygons.append([(float(a), float(b)) for a, b in pairs])
+            continue
+        if rect is not None or not M555_RE.match(stripped):
+            continue
+        code, _ = strip_comment(raw)
+        vals = {}
+        for letter, text in re.findall(r"(?:^|\s)([XYWH])(-?(?:\d+(?:\.\d*)?|\.\d+))",
+                                       code.upper()):
+            vals[letter] = float(text)
+        if len(vals) == 4 and vals["W"] > 0 and vals["H"] > 0:
+            rect = (vals["X"], vals["Y"], vals["X"] + vals["W"], vals["Y"] + vals["H"])
+            source = "M555"
+    # Klipper: the area follows the object definitions, and the generator leaves
+    # exactly one behind -- the pattern's. A second one means a definition of the
+    # sliced model survived, and the mesh would cover that too.
+    if rect is None and polygons:
+        if len(polygons) > 1:
+            return res.fail("%d EXCLUDE_OBJECT_DEFINE, expected one for the pattern"
+                            % len(polygons))
+        points = polygons[0]
+        rect = (min(p[0] for p in points), min(p[1] for p in points),
+                max(p[0] for p in points), max(p[1] for p in points))
+        source = "EXCLUDE_OBJECT_DEFINE"
+    elif rect is not None and len(polygons) > 1:
+        return res.fail("%d EXCLUDE_OBJECT_DEFINE, expected at most one" % len(polygons))
+    if rect is None:
+        return res.skip("neither M555 nor EXCLUDE_OBJECT_DEFINE in the file")
+
+    x0 = y0 = x1 = y1 = None
+    for move, px, py, nx, ny, _z in traverse(doc.body_moves):
+        if not (move.is_extruding and move.has_xy):
+            continue
+        for ax, ay in ((px, py), (nx, ny)):
+            if ax is None or ay is None:
+                continue
+            x0 = ax if x0 is None else min(x0, ax)
+            x1 = ax if x1 is None else max(x1, ax)
+            y0 = ay if y0 is None else min(y0, ay)
+            y1 = ay if y1 is None else max(y1, ay)
+    if x0 is None:
+        return res.skip("no extruding move in the pattern")
+
+    hits = []
+    for value, limit, name in ((x0, rect[0], "left"), (y0, rect[1], "bottom")):
+        if value < limit - 1e-6:
+            hits.append((0, "pattern reaches %.3f mm past the %s edge of the probe area"
+                         % (limit - value, name)))
+    for value, limit, name in ((x1, rect[2], "right"), (y1, rect[3], "top")):
+        if value > limit + 1e-6:
+            hits.append((0, "pattern reaches %.3f mm past the %s edge of the probe area"
+                         % (value - limit, name)))
+    if cfg.bed is not None:
+        bed_x, bed_y = cfg.bed
+        if rect[0] < -1e-6 or rect[1] < -1e-6 or rect[2] > bed_x + 1e-6 or rect[3] > bed_y + 1e-6:
+            hits.append((0, "probe area %.1f/%.1f..%.1f/%.1f leaves the bed %.1fx%.1f"
+                         % (rect + (bed_x, bed_y))))
+    summary = ("%s %.1f/%.1f..%.1f/%.1f, pattern %.1f/%.1f..%.1f/%.1f, margin %.2f mm"
+               % ((source,) + rect + (x0, y0, x1, y1)
+                  + (min(x0 - rect[0], y0 - rect[1], rect[2] - x1, rect[3] - y1),)))
+    if hits:
+        return res.fail(summary, hits)
+    return res.ok(summary)
+
+
 CHECKS = (
     check_text_clean,
     check_numeric_fields,
@@ -1066,6 +1155,7 @@ CHECKS = (
     check_thumbnails,
     check_statistics,
     check_layer_markers,
+    check_probe_area,
 )
 
 

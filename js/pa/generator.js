@@ -5,7 +5,8 @@
  */
 
 import { GEOM, formatPa, round } from './pattern.js';
-import { rewriteStats, parseDuration } from '../gcode.js';
+import { rewriteStats, parseDuration, rewriteProbeArea,
+         MOVE_RE, codeOf, axisValue, moveE, g92E, eModeChange } from '../gcode.js';
 
 const OBJECT_NAME = 'pa_calibration_test';
 
@@ -265,6 +266,46 @@ function insertProgress(out, stamp, total, silentFactor) {
 }
 
 /**
+ * Bounding box of the source file's first layer, measured from its extruding
+ * moves -- the quantity PrusaSlicer derived the M555 probe area from. Null when
+ * the file has no second layer marker or no extrusion in the first layer; the
+ * area is then set to the bare pattern rectangle.
+ */
+function firstLayerBbox(raw) {
+  let a = -1, b = -1;
+  for (let i = 0; i < raw.length; i++) {
+    if (raw[i].trim() !== ';LAYER_CHANGE') continue;
+    if (a < 0) a = i; else { b = i; break; }
+  }
+  if (a < 0 || b < 0) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  let absE = true, e = 0, px = null, py = null;
+  for (let i = a; i < b; i++) {
+    const t = raw[i].trim();
+    if (t === '' || t.charAt(0) === ';') continue;
+    const mode = eModeChange(t);
+    if (mode !== null) { absE = mode; continue; }
+    const g = g92E(t);
+    if (g !== null) { e = g; continue; }
+    if (!MOVE_RE.test(t)) continue;
+    const code = codeOf(t);
+    const nx = axisValue(code, 'X'), ny = axisValue(code, 'Y');
+    const ax = nx === null ? px : nx, ay = ny === null ? py : ny;
+    const mv = moveE(t);
+    if (mv) {
+      const delta = absE ? mv.e - e : mv.e;
+      e = absE ? mv.e : e + delta;
+      if (delta > 0 && mv.hasXY && px !== null && py !== null) {
+        x0 = Math.min(x0, px, ax); y0 = Math.min(y0, py, ay);
+        x1 = Math.max(x1, px, ax); y1 = Math.max(y1, py, ay);
+      }
+    }
+    px = ax; py = ay;
+  }
+  return Number.isFinite(x0) ? { x0, y0, x1, y1 } : null;
+}
+
+/**
  * Replaces the object definition with the rectangle of our pattern and brackets
  * the pattern in EXCLUDE_OBJECT_START/END (decision F).
  */
@@ -289,6 +330,13 @@ function patchStartEnd(plan, stats) {
     start.push(l);
   }
   if (replaced) start.push("EXCLUDE_OBJECT_START NAME='" + OBJECT_NAME + "'");
+  // The Prusa side of the same job: klipper reads the probe area from the
+  // definition above, Prusa firmware from M555 -- and that one still describes
+  // the model that was sliced (see gcode.js).
+  const bed = plan.doc.printer.bed;
+  const probeArea = rewriteProbeArea(start, firstLayerBbox(plan.doc.raw),
+    { x0: g.startX, y0: g.startY, x1: g.startX + g.sizeX, y1: g.startY + g.sizeY },
+    bed && bed.x > 0 && bed.y > 0 ? { x0: 0, y0: 0, x1: bed.x, y1: bed.y } : null);
   const startOut = stats ? rewriteStats(start, stats) : start;
 
   // Moonraker and Mainsail read objects_info for the cancel-object list; left
@@ -299,7 +347,7 @@ function patchStartEnd(plan, stats) {
       : l);
   if (stats) end = rewriteStats(end, stats);
   if (replaced) end.unshift("EXCLUDE_OBJECT_END NAME='" + OBJECT_NAME + "'");
-  return { start: startOut, end, patchedExcludeObject: replaced };
+  return { start: startOut, end, patchedExcludeObject: replaced, probeArea };
 }
 
 /* ------------------------------------------------------------ Header block */
@@ -544,7 +592,7 @@ export function generate(plan) {
   };
 
   /* --- assembly --- */
-  const { start, end, patchedExcludeObject } = patchStartEnd(plan, stats);
+  const { start, end, patchedExcludeObject, probeArea } = patchStartEnd(plan, stats);
   const head = header(plan, stats);
   // Progress only for Marlin: there M73 drives the display. Klipper does not
   // know the command and answers every line with "Unknown command".
@@ -564,6 +612,7 @@ export function generate(plan) {
       timeSec: em.time,
       gcodeLines: lines.length,
       patchedExcludeObject,
+      probeArea,
       retracts: em.retractCount,
       unretracts: em.unretractCount,
     },

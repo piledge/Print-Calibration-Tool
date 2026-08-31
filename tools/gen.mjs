@@ -48,4 +48,5 @@ console.log('  lines total   ', res.stats.gcodeLines, '(pattern ' + res.patternL
 console.log('  Filament      ', res.stats.filamentMm.toFixed(1) + ' mm = ' + res.stats.filamentCm3.toFixed(2) + ' cm3  (extrusion only, no unretracts)');
 console.log('  retract/unret ', res.stats.retracts + '/' + res.stats.unretracts);
 console.log('  ExcludeObject ', res.stats.patchedExcludeObject ? 'replaced' : 'not present');
+console.log('  Probe area    ', res.stats.probeArea ? 'M555 moved onto the pattern' : 'no M555');
 console.log('  ->', outFile);

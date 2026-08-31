@@ -3,11 +3,11 @@ flavor        klipper absolute-E
 profile       1.000
 range         1.125 … 1.125
 objects       56 (1 printed, 55 removed)
-lines         271292 -> 6828 (+115 inserted, -264579 dropped, 3231 E values changed, 10 seam fixes)
+lines         271292 -> 6718 (+60 inserted, -264634 dropped, 3231 E values changed, 10 seam fixes)
 time          5 min
 extrusion     52715.94 -> 1060.08 mm inside objects
 filament      1060.08 mm = 2.55 cm3
-sha256        cea8f5a7074e008eaa3cf0d086c1a8a5ef29272e8cc3f8663c60e09ebc307c9c
+sha256        bf6ca9e92fd2dce519e62518fe41698bddfefc4c82ba235b0936cf8600f16896
 
 --- inserted block ---
 ; >>> print_calibration_tool em map begin

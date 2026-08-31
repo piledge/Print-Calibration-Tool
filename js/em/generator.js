@@ -10,11 +10,15 @@
  * before its start marker, so cutting a plate leaves half an approach behind,
  * aimed at a plate that is gone. Those points are put back on the direct line
  * (straightenTravel) -- X and Y only, on moves that place no material.
+ *
+ * Second exception, for the same reason: the area the printer probes before the
+ * print. It is derived from the whole plate and would still cover it after a
+ * cut (see the two blocks about the object declarations and about M555).
  */
 
 import { moveE, g92E, eModeChange, rewriteStats, formatCoord as formatE,
          codeOf, axisValue, setAxis, formatDuration, parseDuration,
-         MOVE_RE } from '../gcode.js';
+         rewriteProbeArea, MOVE_RE } from '../gcode.js';
 
 const MAP_BEGIN = '; >>> print_calibration_tool em map begin';
 const MAP_END   = '; <<< print_calibration_tool em map end';
@@ -53,14 +57,13 @@ function mapLines(plan) {
       ' | ' + (o.printed ? 'printed' : 'removed, ' + reasonOf(o)));
   }
   L.push(MAP_END);
-  // The removed objects' toolpaths are gone, but their declarations stay (M486
-  // numbering hangs off them), so each one is cancelled individually —
-  // otherwise they wait in the printer's object list until the print ends.
+  // With M486 the removed objects' declarations have to stay -- the object
+  // numbering hangs off them -- so each one is cancelled individually,
+  // otherwise it waits in the printer's object list until the print ends.
+  // Klipper needs no command: there the declaration itself is cut out.
   for (const o of plan.objects) {
-    if (o.printed) continue;
-    L.push(plan.flavor === 'klipper'
-      ? 'EXCLUDE_OBJECT NAME=' + o.token
-      : 'M486 P' + o.id);
+    if (o.printed || plan.flavor === 'klipper') continue;
+    L.push('M486 P' + o.id);
   }
   return L;
 }
@@ -177,6 +180,20 @@ function straightenTravel(out, from, run) {
   return fixed;
 }
 
+/** Bounding box over the objects' extrusions, null when there is none. */
+function bbox(objects, printedOnly) {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const o of objects) {
+    if (printedOnly && !o.printed) continue;
+    if (!Number.isFinite(o.minX)) continue;
+    if (o.minX < x0) x0 = o.minX;
+    if (o.minY < y0) y0 = o.minY;
+    if (o.maxX > x1) x1 = o.maxX;
+    if (o.maxY > y1) y1 = o.maxY;
+  }
+  return Number.isFinite(x0) ? { x0, y0, x1, y1 } : null;
+}
+
 /** `plan` comes from buildEmPlan() in em/objects.js. */
 export function generateEm(plan) {
   const raw = plan.raw;
@@ -192,6 +209,13 @@ export function generateEm(plan) {
     if (objects[sp.obj].printed) continue;
     for (let i = sp.mark; i < sp.stop; i++) drop[i] = 1;
     if (sp.endMark >= 0) drop[sp.endMark] = 1;
+  }
+  // Klipper's adaptive bed mesh (KAMP, and klipper's own ADAPTIVE=1) reads the
+  // EXCLUDE_OBJECT_DEFINE list, not the exclusions -- a plate that is merely
+  // cancelled still gets probed. So the declaration falls with the plate, and
+  // the cancel command in mapLines() becomes unnecessary.
+  for (const o of objects) {
+    if (!o.printed && o.defLine >= 0) drop[o.defLine] = 1;
   }
   const cutting = objects.some(o => !o.printed);
 
@@ -358,6 +382,11 @@ export function generateEm(plan) {
     silentSec *= share;
     lines = rewriteTime(lines, accOut, timeSec, silentSec);
   }
+  // The probe area follows the plates that are left (see gcode.js).
+  const bed = plan.bed && plan.bed.x > 0 && plan.bed.y > 0
+    ? { x0: 0, y0: 0, x1: plan.bed.x, y1: plan.bed.y } : null;
+  const probeFixes = cutting
+    ? rewriteProbeArea(lines, bbox(objects, false), bbox(objects, true), bed) : 0;
 
   return {
     lines,
@@ -367,6 +396,7 @@ export function generateEm(plan) {
       droppedLines: dropped,
       seamFixes: seams,
       travelFixes,
+      probeFixes,
       gcodeLines: lines.length,
       removed: objects.filter(o => !o.printed).length,
       active: objects.filter(o => o.printed).length,

@@ -69,6 +69,12 @@ TIME_RE = re.compile(r"^;\s*estimated printing time", re.I)
 XO_END_RE = re.compile(r"^EXCLUDE_OBJECT_END\b", re.I)
 # Move with E but without X/Y: retract or deretract.
 RETRACT_ONLY_RE = re.compile(r"^G[0-3](?![0-9])(?![^;]*[XY]-?[\d.])[^;]*\sE-?[\d.]")
+# A move with X/Y and no E at all is pure travel. Cutting a plate leaves the
+# first half of the approach to it behind, aimed at a plate that is gone; the
+# generator spreads those points along the direct line instead. Only X and Y
+# change, and only on lines that place no material.
+TRAVEL_RE = re.compile(r"^G[0-3](?![0-9])(?![^;]*\sE-?[\d.])[^;]*[XY]-?[\d.]")
+XY_TOKEN_RE = re.compile(r"(?<=[XY])-?(?:\d+(?:\.\d*)?|\.\d+)")
 M486_P_RE = re.compile(r"^M486\s+P(-?\d+)\s*$")
 EXCLUDE_OBJ_RE = re.compile(r"^EXCLUDE_OBJECT\s+NAME=(\S+)\s*$")
 
@@ -859,6 +865,9 @@ def lines_match(ctx, idx, src_line, out_line):
         return True
     if TIME_RE.match(a) and TIME_RE.match(b):
         return True
+    if TRAVEL_RE.match(a) and TRAVEL_RE.match(b):
+        if XY_TOKEN_RE.sub("*", a) == XY_TOKEN_RE.sub("*", b):
+            return True
     ba, bb = blank_e(src_line), blank_e(out_line)
     return ba == bb and ba != src_line
 
@@ -1047,6 +1056,97 @@ def check_progress(ctx):
     return result.ok("%d progress lines, falling, ending at 0" % len(rest))
 
 
+AXIS_RE = {}
+
+
+def axis(code, letter):
+    """Value behind an axis letter in the command part of a line."""
+    re_ = AXIS_RE.get(letter)
+    if re_ is None:
+        re_ = AXIS_RE[letter] = re.compile(
+            r"(?:^|\s)%s(-?(?:\d+(?:\.\d*)?|\.\d+))" % letter)
+    m = re_.search(code)
+    return float(m.group(1)) if m else None
+
+
+def object_travels(doc):
+    """Extra path length of every travel that leads from one object to another.
+
+    The slicer never travels in a straight line -- the ramping lift alone takes
+    several segments -- so a detour is normal. What is not normal is a detour to
+    a plate that is no longer printed, and that is what the numbers separate.
+    """
+    import math
+    extra = []
+    x = y = None
+    cur = None
+    start = None
+    pts = []
+    frm = None
+    for line in doc.lines:
+        t = line.strip()
+        m = M486_S_RE.match(t)
+        if m:
+            # "M486 S-1" closes without naming a successor; the object stays
+            # open until the next marker, exactly as the printer sees it.
+            if m.group(1) != "-1":
+                cur = "M486 " + m.group(1)
+            continue
+        if OBJ_END_RE.match(t):
+            continue
+        m = OBJ_START_RE.match(t)
+        if m:
+            cur = m.group(1)
+            continue
+        if not MOVE_RE.match(t):
+            continue
+        code = t.split(";")[0]
+        nx, ny = axis(code, "X"), axis(code, "Y")
+        e = axis(code, "E")
+        px, py = x, y
+        if nx is not None:
+            x = nx
+        if ny is not None:
+            y = ny
+        moving = nx is not None or ny is not None
+        if e is not None and e > 0 and moving:
+            # The travel ends at its last point, not at the end of the first
+            # extruding move -- that one lays material and is not a detour.
+            if pts and start is not None and frm is not None and cur is not None and frm != cur:
+                poly = [start] + pts
+                real = sum(math.dist(poly[k], poly[k + 1]) for k in range(len(poly) - 1))
+                extra.append(real - math.dist(start, pts[-1]))
+            pts = []
+            start = (x, y)
+            frm = cur
+        elif moving:
+            if start is None:
+                start = (px, py) if px is not None else (x, y)
+            pts.append((x, y))
+    return extra
+
+
+def check_travel_between_objects(ctx):
+    """12) No travel between two objects makes a bigger detour than the source
+    itself ever does. Cutting a plate out leaves the first half of the approach
+    to it behind; the head would drive to the gap and only then to the next
+    plate. The source is the yardstick -- it needs no number of its own."""
+    result = Result("travel between objects")
+    src = object_travels(ctx.source)
+    out = object_travels(ctx.output)
+    if not src or not out:
+        return result.skip("no travel between objects found")
+    worst_src, worst_out = max(src), max(out)
+    if worst_out > worst_src + 1.0:
+        over = [d for d in out if d > worst_src + 1.0]
+        return result.fail(
+            "%d travel(s) with a bigger detour than anything in the source "
+            "(worst %.0f mm against %.0f mm)" % (len(over), worst_out, worst_src),
+            [(0, "detour %.0f mm" % d) for d in sorted(over, reverse=True)[:10]])
+    return result.ok("%d travels, worst detour %.0f mm; the source reaches %.0f mm"
+                     % (len(out), worst_out, worst_src))
+
+
 CHECKS = (
     check_map_header,
     check_object_segmentation,
@@ -1059,6 +1159,7 @@ CHECKS = (
     check_number_sanity,
     check_effectiveness,
     check_progress,
+    check_travel_between_objects,
 )
 
 

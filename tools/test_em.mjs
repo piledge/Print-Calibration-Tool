@@ -461,6 +461,52 @@ function cutOk(raw, range) {
     moves.length === 4, moves.join(' | '));
 }
 
+/* --- 17b) Travel to a removed plate is put back on the direct line ---------
+   The slicer emits the approach to a plate partly before its start marker, so
+   cutting the plate leaves that half behind. Here the middle plate goes: the
+   head must not visit its corner any more. */
+{
+  const decl = [];
+  for (const [id, name] of [[0, '0.900'], [1, '1.000'], [2, '1.100']]) {
+    decl.push('M486 S' + id, 'M486 A' + name, 'M486 S-1');
+  }
+  // Per plate: retract, the ramp toward it (BEFORE its marker), then its marker,
+  // the last approach segment, deretract, one extrusion.
+  const plate = (id, ramp) => ['G1 E-.7 F2700']
+    .concat(ramp.map(p => 'G1 X' + p[0] + ' Y' + p[1] + ' F21000'))
+    .concat(['M486 S-1', 'M486 S' + id,
+             'G1 X' + (10 + id * 40) + ' Y10 F21000', 'G1 E.7 F1500',
+             'G1 X' + (30 + id * 40) + ' Y10 E1']);
+  const raw = decl.concat([';LAYER_CHANGE', ';Z:0.2'],
+    plate(0, [[5, 60], [8, 40]]),
+    plate(1, [[45, 80], [48, 50]]),      // ramp toward the middle plate
+    plate(2, [[85, 90], [88, 60]]),
+    [';LAYER_CHANGE', ';Z:0.5', 'G1 E-.7 F2700', ';AFTER_LAYER_CHANGE']);
+  const { res } = run(raw, { relativeE: true }, { from: 1.05, to: 1.15 });
+  const L = res.lines;
+  const xy = L.filter(l => /^G1 X[\d.]+ Y[\d.]+ F21000$/.test(l))
+              .map(l => l.match(/X([\d.]+) Y([\d.]+)/).slice(1, 3).map(Number));
+  check('the ramp toward the removed plate no longer reaches its corner',
+    !xy.some(p => Math.abs(p[0] - 45) < 1 && Math.abs(p[1] - 80) < 1),
+    xy.map(p => p.join('/')).join(' '));
+  check('the redirected points lie on the line to the plate really printed',
+    xy.filter(p => p[1] > 60).every(p => p[0] > 40), xy.map(p => p.join('/')).join(' '));
+  // The property that matters: the points are on the line, not merely nearer
+  // to it. Cross product of (last - first) with (point - first) has to vanish.
+  const [ax, ay] = xy[0], [bx, by] = xy[xy.length - 1];
+  const off = xy.map(([x, y]) => Math.abs((bx - ax) * (y - ay) - (by - ay) * (x - ax))
+                                 / Math.hypot(bx - ax, by - ay));
+  check('every redirected point lies on that line',
+    Math.max(...off) < 0.01, off.map(v => v.toFixed(3)).join(' '));
+  check('the generator counts what it straightened',
+    res.stats.travelFixes > 0, String(res.stats.travelFixes));
+
+  // Nothing cut: not a single coordinate may move.
+  const whole = run(raw, { relativeE: true }, { from: 0.85, to: 1.15 });
+  check('without a cut no travel is touched',
+    whole.res.stats.travelFixes === 0, String(whole.res.stats.travelFixes));
+}
+
 /* --- 18) An incomplete plate is an error ---------------------------------- */
 function fullPlate(drop) {
   const L = [];

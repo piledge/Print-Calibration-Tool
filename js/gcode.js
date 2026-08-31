@@ -56,6 +56,20 @@ export function axisValue(code, letter) {
   return m ? parseFloat(m[2]) : null;
 }
 
+/**
+ * Replace the number behind an axis letter without rebuilding the line, so
+ * spacing, feedrate and the other axes survive untouched.
+ */
+const AXIS_SET = {};
+export function setAxis(code, letter, text) {
+  let re = AXIS_SET[letter];
+  if (!re) {
+    re = AXIS_SET[letter] =
+      new RegExp('((?:^|\\s)' + letter + ')(-?(?:\\d+(?:\\.\\d*)?|\\.\\d+))');
+  }
+  return code.replace(re, (m, head) => head + text);
+}
+
 /** G92 with an E value -> the new position, otherwise null. */
 export function g92E(line) {
   const m = G92_RE.exec(codeOf(line));

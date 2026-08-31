@@ -7,11 +7,11 @@ lines         271292 -> 6828 (+115 inserted, -264579 dropped, 3231 E values chan
 time          5 min
 extrusion     52715.94 -> 1060.08 mm inside objects
 filament      1060.08 mm = 2.55 cm3
-sha256        77aa98afae6b0d3febc017026287ed785b8de4fde82b3ac48bf296e32b2ab841
+sha256        cea8f5a7074e008eaa3cf0d086c1a8a5ef29272e8cc3f8663c60e09ebc307c9c
 
 --- inserted block ---
 ; >>> print_calibration_tool em map begin
-; em profile multiplier = 1.000
+; em profile multiplier = 1.00000
 ; em selected = 1.125 … 1.125, 1 of 56 plates
 ; em object 0 | 0_850 | em=0.850 | factor=0.85000 | x=23.500 | y=197.000 | removed, outside the selected range
 ; em object 1 | 0_885 | em=0.885 | factor=0.88500 | x=52.500 | y=81.000 | removed, outside the selected range

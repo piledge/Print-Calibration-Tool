@@ -32,6 +32,9 @@ console.log('--- generated ---');
 console.log('  lines         ', res.stats.gcodeLines, '(' + res.stats.inserted + ' inserted, ' +
   res.stats.droppedLines + ' dropped, ' + res.stats.changedLines + ' E values changed)');
 if (res.stats.seamFixes) console.log('  seam fixes    ', res.stats.seamFixes, 'retracts dropped');
+if (res.stats.travelFixes) {
+  console.log('  travel fixes  ', res.stats.travelFixes, 'moves put back on the direct line');
+}
 if (Number.isFinite(res.stats.timeSec)) {
   console.log('  time          ', (res.stats.timeSec / 60).toFixed(1) + ' min');
 }

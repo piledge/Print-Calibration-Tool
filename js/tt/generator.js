@@ -12,7 +12,7 @@
  */
 
 import {
-  MOVE_RE, codeOf, moveE, g92E, eModeChange, axisValue,
+  MOVE_RE, codeOf, moveE, g92E, eModeChange, axisValue, setAxis,
   formatCoord, formatDuration, rewriteStats,
 } from '../gcode.js';
 
@@ -35,17 +35,6 @@ const Z_MARK = ';Z:';
 // 0.25 mm layer height the slicer cuts two of them out of it, at 0.3 mm only
 // one. Missing ones are made up by repeating the topmost.
 const MIN_MIDDLE = 2;
-
-/** Replace the number after an axis letter without rebuilding the line. */
-const AXIS_SET = {};
-function setAxis(code, letter, text) {
-  let re = AXIS_SET[letter];
-  if (!re) {
-    re = AXIS_SET[letter] =
-      new RegExp('((?:^|\\s)' + letter + ')(-?(?:\\d+(?:\\.\\d*)?|\\.\\d+))');
-  }
-  return code.replace(re, (m, head) => head + text);
-}
 
 /**
  * Number for a comment line: PrusaSlicer writes `0.2` there, not `.2` as in the

@@ -128,7 +128,7 @@ main{
 }
 
 /* Version left, source link centre, signature right. The centre only sits in
-   the centre when the outer two are equally wide, which "v0.1 beta" and
+   the centre when the outer two are equally wide, which "v0.2 beta" and
    "piledge 2026" are not: they share the remainder in equal parts instead, the
    right one right-aligned, so the link lands on the page centre. */
 .statusbar > .version,

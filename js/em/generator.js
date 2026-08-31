@@ -5,10 +5,16 @@
  * No new geometry: the output is the input with every extrusion inside an
  * object's markers multiplied by that object's factor. Retracts, deretracts and
  * everything outside the markers stay untouched.
+ *
+ * The one exception is travel: the slicer emits the approach to an object partly
+ * before its start marker, so cutting a plate leaves half an approach behind,
+ * aimed at a plate that is gone. Those points are put back on the direct line
+ * (straightenTravel) -- X and Y only, on moves that place no material.
  */
 
 import { moveE, g92E, eModeChange, rewriteStats, formatCoord as formatE,
-         codeOf, axisValue, formatDuration, parseDuration, MOVE_RE } from '../gcode.js';
+         codeOf, axisValue, setAxis, formatDuration, parseDuration,
+         MOVE_RE } from '../gcode.js';
 
 const MAP_BEGIN = '; >>> print_calibration_tool em map begin';
 const MAP_END   = '; <<< print_calibration_tool em map end';
@@ -27,7 +33,11 @@ function reasonOf(o) {
 
 function mapLines(plan) {
   const num = (v, d) => Number.isFinite(v) ? v.toFixed(d) : '-';
-  const L = [MAP_BEGIN, '; em profile multiplier = ' + plan.profile.toFixed(3),
+  // Five decimals like the factors below: rounded to three, a profile of
+  // 0.9825 reads as 0.983 and every factor in the map stops matching em divided
+  // by it. The values written into the file were always right -- only the map
+  // did not add up for anyone recomputing it.
+  const L = [MAP_BEGIN, '; em profile multiplier = ' + plan.profile.toFixed(5),
     '; em selected = ' + num(plan.from, 3) + ' … ' + num(plan.to, 3) + ', '
       + plan.objects.filter(o => o.printed).length + ' of ' + plan.objects.length + ' plates'];
   for (const o of plan.objects) {
@@ -117,6 +127,52 @@ function rewriteTime(lines, acc, totalSec, silentSec) {
   });
 }
 
+/**
+ * Redirect a run of travel moves onto the straight line from where the head
+ * really is to where it really has to go.
+ *
+ * The slicer emits the approach to an object partly BEFORE its start marker.
+ * Cutting a plate out therefore leaves the first half of the approach behind,
+ * still aimed at the plate that is gone; the head drives there and only then to
+ * the next one printed. Measured on a nine-plate selection: detours up to
+ * 290 mm, where the source itself never exceeds 52 mm.
+ *
+ * The points are not deleted but spread along the direct line, each keeping its
+ * share of the original path length. That way the Z ramp of the lift, the
+ * feedrates and the number of lines stay exactly as the slicer wrote them --
+ * only X and Y move onto the line that leads somewhere.
+ *
+ * @param {string[]} out    output lines, edited in place
+ * @param {{x:number, y:number}} from   position before the first point
+ * @param {{i:number, x:number, y:number}[]} run  travel points, last one is the target
+ * @returns {number} how many lines were rewritten
+ */
+function straightenTravel(out, from, run) {
+  const to = run[run.length - 1];
+  const pts = [from].concat(run);
+  const step = [];
+  let total = 0;
+  for (let k = 1; k < pts.length; k++) {
+    total += Math.hypot(pts[k].x - pts[k - 1].x, pts[k].y - pts[k - 1].y);
+    step.push(total);
+  }
+  if (!(total > 0)) return 0;
+  let fixed = 0;
+  for (let k = 0; k < run.length - 1; k++) {
+    const f = step[k] / total;
+    const nx = Math.round((from.x + (to.x - from.x) * f) * 1000) / 1000;
+    const ny = Math.round((from.y + (to.y - from.y) * f) * 1000) / 1000;
+    if (nx === run[k].x && ny === run[k].y) continue;
+    const line = out[run[k].i];
+    const semi = line.indexOf(';');
+    const code = semi < 0 ? line : line.slice(0, semi);
+    const rest = semi < 0 ? '' : line.slice(semi);
+    out[run[k].i] = setAxis(setAxis(code, 'X', formatE(nx)), 'Y', formatE(ny)) + rest;
+    fixed++;
+  }
+  return fixed;
+}
+
 /** `plan` comes from buildEmPlan() in em/objects.js. */
 export function generateEm(plan) {
   const raw = plan.raw;
@@ -158,6 +214,22 @@ export function generateEm(plan) {
   // deretract the output needs because the block before it was cut away.
   let srcRetracted = false, outRetracted = false;
 
+  // A travel run: everything between two extruding moves. `run` collects the
+  // moves inside it that carry X/Y and no E at all -- pure travel. `anchor` is
+  // the position the redirect starts from: after the last retract, because a
+  // wipe before it still belongs to the plate just finished. Only a run with a
+  // cut in it is touched; without one the slicer's own path is still right.
+  let px = null, py = null;
+  let run = [], anchor = null, cutInRun = false, travelFixes = 0;
+  const closeRun = () => {
+    if (cutInRun && anchor && run.length >= 2) {
+      travelFixes += straightenTravel(out, anchor, run);
+    }
+    run = [];
+    cutInRun = false;
+    anchor = px === null ? null : { x: px, y: py };
+  };
+
   for (let i = 0; i < raw.length; i++) {
     if (i === atRaw) mapAt = out.length;
     const keep = drop[i] === 0;
@@ -187,7 +259,21 @@ export function generateEm(plan) {
 
     const mv = moveE(t);
     if (!mv) {
-      if (keep) out.push(raw[i]); else dropped++;
+      if (!keep) { dropped++; cutInRun = true; continue; }
+      // A move without an E word is travel. It is collected for the redirect
+      // and moves the position; anything else just passes through.
+      if (MOVE_RE.test(t)) {
+        const code = codeOf(t);
+        const nx = axisValue(code, 'X'), ny = axisValue(code, 'Y');
+        if (nx !== null || ny !== null) {
+          if (anchor === null && px !== null) anchor = { x: px, y: py };
+          if (nx !== null) px = nx;
+          if (ny !== null) py = ny;
+          if (nx !== null && ny !== null) run.push({ i: out.length, x: px, y: py });
+          else run = [];      // half a coordinate cannot be redirected safely
+        }
+      }
+      out.push(raw[i]);
       continue;
     }
 
@@ -197,7 +283,7 @@ export function generateEm(plan) {
     if (pure) srcRetracted = delta < 0;
     inE = absE ? mv.e : inE + delta;
 
-    if (!keep) { dropped++; continue; }
+    if (!keep) { dropped++; cutInRun = true; continue; }
     if (pure) {
       const intent = delta < 0;                    // true = retracted
       if (intent === outRetracted && intent !== wasRetracted) {
@@ -206,13 +292,23 @@ export function generateEm(plan) {
       outRetracted = intent;
     }
 
+    // A retract ends the plate just finished: everything after it is travel and
+    // may be redirected, everything before it (the wipe) may not.
+    if (pure && delta < 0) { run = []; anchor = px === null ? null : { x: px, y: py }; }
+    if (mv.hasXY) {
+      const code = codeOf(t);
+      const nx = axisValue(code, 'X'), ny = axisValue(code, 'Y');
+      if (nx !== null) px = nx;
+      if (ny !== null) py = ny;
+    }
+
     const o = owner[i] >= 0 ? objects[owner[i]] : null;
     // Only extrusion is scaled: positive delta with an XY move. Retract
     // (negative), deretract (positive without travel) and wipe (negative with
     // travel) stay as they are.
     const scaled = o && o.factor !== null && delta > 0 && mv.hasXY;
     const nd = scaled ? delta * o.factor : delta;
-    if (nd > 0 && mv.hasXY) extruded += nd;
+    if (nd > 0 && mv.hasXY) { extruded += nd; closeRun(); }
 
     outE += nd;
     let text;
@@ -266,6 +362,7 @@ export function generateEm(plan) {
       changedLines: changed,
       droppedLines: dropped,
       seamFixes: seams,
+      travelFixes,
       gcodeLines: lines.length,
       removed: objects.filter(o => !o.printed).length,
       active: objects.filter(o => o.printed).length,

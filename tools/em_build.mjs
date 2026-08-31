@@ -12,7 +12,8 @@ import { generateEm } from '../js/em/generator.js';
  * @param {string} inFile  .gcode or .bgcode
  * @param {string} [rename] "old:new" — renames an object so the skip path can
  *   be exercised without a dedicated sample file
- * @param {{from:number,to:number}} [range] value range; if absent, the whole plate
+ * @param {{from:number,to:number,fine:boolean}} [range] value range and step;
+ *   if absent, the whole plate in half-percent steps
  * @returns {{plan:object, issues:object[], res:object|null}}
  *   `res` is null when an error was reported.
  */

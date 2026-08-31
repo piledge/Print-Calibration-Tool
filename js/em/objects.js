@@ -379,7 +379,17 @@ export function findObjects(raw, doc) {
    all use. As with the tower it lives here and not in test.js, so the command
    line cannot compute with different values than the browser. */
 
-/** `input` is {from, to}, the selected range. */
+/**
+ * A whole percent: the third decimal is a zero. The values sit on a 3-decimal
+ * grid, so the test is exact. Anchored to the value itself, not to the start of
+ * the range -- otherwise which plates get printed would depend on where the
+ * range happens to begin.
+ */
+function wholePercent(v) {
+  return Math.round(v * 1000) % 10 === 0;
+}
+
+/** `input` is {from, to, fine}, the selected range and its step. */
 export function buildEmPlan(raw, doc, input) {
   const found = findObjects(raw, doc);
   // Of the settings.js messages only the tool index (W5) is carried over.
@@ -393,10 +403,14 @@ export function buildEmPlan(raw, doc, input) {
   const ordered = found.objects.filter(o => !o.skip).sort((a, b) => a.value - b.value);
   const from = Number.isFinite(input && input.from) ? input.from : VALUES[0];
   const to = Number.isFinite(input && input.to) ? input.to : VALUES[VALUES.length - 1];
+  // Half-percent steps unless switched off; then only the whole percent values,
+  // half the plates and half the time to find the rough position first.
+  const fine = !(input && input.fine === false);
   // What lies outside the range is not skipped but cut out of the file --
   // exactly like a plate with an unreadable name.
   for (const o of found.objects) {
-    o.printed = !o.skip && o.value >= from - 1e-9 && o.value <= to + 1e-9;
+    o.printed = !o.skip && o.value >= from - 1e-9 && o.value <= to + 1e-9
+                && (fine || wholePercent(o.value));
   }
   const printed = ordered.filter(o => o.printed);
   if (from > to) {
@@ -404,14 +418,19 @@ export function buildEmPlan(raw, doc, input) {
       'Lower value (' + from.toFixed(3) + ') is above the upper one (' + to.toFixed(3) + ').',
       ['em-from', 'em-to']));
   } else if (ordered.length && !printed.length) {
-    issues.push(issue('error', 'E14',
-      'No plate lies between ' + from.toFixed(3) + ' and ' + to.toFixed(3) + '.',
-      ['em-from', 'em-to']));
+    issues.push(fine
+      ? issue('error', 'E14',
+          'No plate lies between ' + from.toFixed(3) + ' and ' + to.toFixed(3) + '.',
+          ['em-from', 'em-to'])
+      : issue('error', 'E14',
+          'No whole percent value lies between ' + from.toFixed(3) + ' and '
+          + to.toFixed(3) + ' — switch half-percent steps back on.',
+          ['em-fine']));
   }
 
   const hasError = issues.some(i => i.level === 'error');
   return Object.assign({}, found, {
-    raw, doc, issues, hasError, from, to,
+    raw, doc, issues, hasError, from, to, fine,
     renderable: found.objects.length > 0 && !hasError,
     printed, bed, selected: -1,
   });

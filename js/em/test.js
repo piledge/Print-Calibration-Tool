@@ -56,19 +56,23 @@ export const emTest = {
 
   wire(onChange) {
     fillSelects();
-    for (const id of ['em-from', 'em-to']) {
-      const sel = el(id);
-      if (sel) sel.addEventListener('change', () => onChange(true));
+    for (const id of ['em-from', 'em-to', 'em-fine']) {
+      const node = el(id);
+      if (node) node.addEventListener('change', () => onChange(true));
     }
     const btn = el('em-reset-btn');
     if (btn) {
       btn.title = 'Back to the whole plate, ' + defaultOf('em-from').toFixed(3) + ' … '
-        + defaultOf('em-to').toFixed(3);
+        + defaultOf('em-to').toFixed(3) + ', in half-percent steps';
       btn.addEventListener('click', () => {
         for (const id of ['em-from', 'em-to']) {
           const sel = el(id);
           if (sel) for (const opt of sel.options) opt.selected = opt.defaultSelected;
         }
+        // The default sits in the HTML as `checked`; the browser keeps it in
+        // defaultChecked, so there is no second list that could drift apart.
+        const fine = el('em-fine');
+        if (fine) fine.checked = fine.defaultChecked;
         onChange(true);
       });
     }
@@ -79,7 +83,8 @@ export const emTest = {
       const sel = el(id);
       return sel ? parseFloat(sel.value) : NaN;
     };
-    return { from: num('em-from'), to: num('em-to') };
+    const fine = el('em-fine');
+    return { from: num('em-from'), to: num('em-to'), fine: fine ? fine.checked : true };
   },
 
   applyStored(s) {
@@ -90,14 +95,20 @@ export const emTest = {
       const v = Number(s[key]);
       if (sel && VALUES.some(x => x === v)) sel.value = v.toFixed(3);
     }
+    // A record written before the checkbox existed carries no `fine`; the box
+    // then keeps its default instead of losing the stored range to a version
+    // bump.
+    const fine = el('em-fine');
+    if (fine && typeof s.fine === 'boolean') fine.checked = s.fine;
   },
 
   build(doc, input) {
-    if (cache && cache.doc === doc && cache.from === input.from && cache.to === input.to) {
+    if (cache && cache.doc === doc && cache.from === input.from && cache.to === input.to
+        && cache.fine === input.fine) {
       return cache.plan;
     }
     const plan = buildEmPlan(doc.raw, doc, input);
-    cache = { doc, from: input.from, to: input.to, plan, out: null };
+    cache = { doc, from: input.from, to: input.to, fine: input.fine, plan, out: null };
     return plan;
   },
 

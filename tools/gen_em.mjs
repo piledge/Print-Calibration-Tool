@@ -2,18 +2,23 @@
  * Development helper for the EM test: generates the output file without a
  * browser, so the modules can be checked against real files.
  *
- *   node tools/gen_em.mjs <in.gcode|in.bgcode> <out.gcode> [from] [to]
+ *   node tools/gen_em.mjs <in.gcode|in.bgcode> <out.gcode> [from] [to] [coarse]
+ *
+ * `coarse` prints only the whole percent values, as the unticked checkbox does.
  */
 import { writeFileSync } from 'node:fs';
 import { buildEm, reportIssues } from './em_build.mjs';
 
-const [, , inFile, outFile, from, to] = process.argv;
+const [, , inFile, outFile, from, to, coarse] = process.argv;
 if (!inFile || !outFile) {
-  console.error('Usage: node tools/gen_em.mjs <in.gcode|in.bgcode> <out.gcode> [from] [to]');
+  console.error('Usage: node tools/gen_em.mjs <in.gcode|in.bgcode> <out.gcode> '
+    + '[from] [to] [coarse]');
   process.exit(2);
 }
 
-const range = (from || to) ? { from: parseFloat(from), to: parseFloat(to) } : undefined;
+const fine = coarse !== 'coarse';
+const range = (from || to || !fine)
+  ? { from: parseFloat(from), to: parseFloat(to), fine } : undefined;
 const { plan, issues, res } = await buildEm(inFile, undefined, range);
 if (reportIssues(issues)) {
   console.error('\nERROR: nothing generated.');
@@ -26,7 +31,8 @@ console.log('--- detected ---');
 console.log('  flavour       ', plan.flavor, plan.absoluteE ? '(absolute E)' : '(relative E)');
 console.log('  objects       ', plan.objects.length,
   '(' + res.stats.active + ' printed, ' + res.stats.removed + ' removed)');
-console.log('  range         ', plan.from.toFixed(3) + ' … ' + plan.to.toFixed(3));
+console.log('  range         ', plan.from.toFixed(3) + ' … ' + plan.to.toFixed(3)
+  + (plan.fine ? '' : ', whole percent only'));
 console.log('  values        ', vals[0] + ' … ' + vals[vals.length - 1]);
 console.log('--- generated ---');
 console.log('  lines         ', res.stats.gcodeLines, '(' + res.stats.inserted + ' inserted, ' +

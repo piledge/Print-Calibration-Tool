@@ -72,7 +72,7 @@ if [ "$SAMPLES" = "0" ]; then skip "section 2"; else
 # so every case carries its range.
 EM_VORON="References/em_neu_Extrusion_Multipliers_0.4n_0.3mm_PLA_Voron 0.4mm CHT_4h31m.gcode"
 EM_CORE="References/em_neu_Extrusion_Multipliers_0.4n_0.25mm_PLA_COREONE_3h34m.bgcode"
-# name|source|rename (empty = none)|from|to
+# name|source|rename (empty = none)|from|to|coarse
 EM_CASES="
 em_voron|$EM_VORON|||
 em_coreone|$EM_CORE|||
@@ -82,10 +82,12 @@ em_voron_one|$EM_VORON||1.125|1.125
 em_coreone_low|$EM_CORE||0.850|0.900
 em_voron_em095|$EM_VORON|; extrusion_multiplier = 1:; extrusion_multiplier = 0.95||
 em_voron_prefix|$EM_VORON|'0_965':'EM_Cube_0_965_stl'||
+em_voron_coarse|$EM_VORON||||coarse
 "
-echo "$EM_CASES" | while IFS='|' read -r name src ren lo hi; do
+echo "$EM_CASES" | while IFS='|' read -r name src ren lo hi coarse; do
   [ -z "$name" ] && continue
-  node tools/em_digest.mjs "$src" "$TMP/$name.gcode" "$TMP/$name.txt" "$ren" "$lo" "$hi" >/dev/null
+  node tools/em_digest.mjs "$src" "$TMP/$name.gcode" "$TMP/$name.txt" "$ren" "$lo" "$hi" \
+    "$coarse" >/dev/null
 done
 for g in $(echo "$EM_CASES" | awk -F'|' 'NF{print $1}'); do compare_golden "$g" txt 30; done
 fi
@@ -192,7 +194,8 @@ for pair in "em_voron|$EM_VORON" "em_coreone|$TMP/em_coreone_in.gcode" \
             "em_voron_mid|$EM_VORON" "em_coreone_mid|$TMP/em_coreone_in.gcode" \
             "em_voron_one|$EM_VORON" "em_coreone_low|$TMP/em_coreone_in.gcode" \
             "em_voron_em095|$TMP/em_voron_em095_in.gcode" \
-            "em_voron_prefix|$TMP/em_voron_prefix_in.gcode"; do
+            "em_voron_prefix|$TMP/em_voron_prefix_in.gcode" \
+            "em_voron_coarse|$EM_VORON"; do
   name=${pair%%|*}; src=${pair#*|}
   if python3 tools/check_em.py "$src" "$TMP/$name.gcode" >"$TMP/ce.txt" 2>&1; then
     echo "  ok           $name  $(grep '^Summary' "$TMP/ce.txt")"

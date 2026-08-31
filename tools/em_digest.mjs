@@ -4,13 +4,15 @@ import { basename } from 'node:path';
 import { findObjects } from '../js/em/objects.js';
 import { buildEm, reportIssues } from './em_build.mjs';
 
-const [, , inFile, outFile, digestFile, rename, from, to] = process.argv;
+const [, , inFile, outFile, digestFile, rename, from, to, coarse] = process.argv;
 if (!inFile || !outFile || !digestFile) {
-  console.error('Usage: node tools/em_digest.mjs <in.gcode|in.bgcode> <out.gcode> <digest.txt> [old:new] [from] [to]');
+  console.error('Usage: node tools/em_digest.mjs <in.gcode|in.bgcode> <out.gcode> <digest.txt> [old:new] [from] [to] [coarse]');
   process.exit(2);
 }
 
-const range = (from || to) ? { from: parseFloat(from), to: parseFloat(to) } : undefined;
+const fine = coarse !== 'coarse';
+const range = (from || to || !fine)
+  ? { from: parseFloat(from), to: parseFloat(to), fine } : undefined;
 const { plan, issues, res } = await buildEm(inFile, rename, range);
 if (!res) { reportIssues(issues); process.exit(1); }
 
@@ -28,7 +30,8 @@ L.push('source        ' + basename(inFile)
   + (rename && rename.indexOf(':') !== -1 ? '  [renamed ' + rename + ']' : ''));
 L.push('flavor        ' + plan.flavor + (plan.absoluteE ? ' absolute-E' : ' relative-E'));
 L.push('profile       ' + plan.profile.toFixed(3));
-L.push('range         ' + plan.from.toFixed(3) + ' … ' + plan.to.toFixed(3));
+L.push('range         ' + plan.from.toFixed(3) + ' … ' + plan.to.toFixed(3)
+  + (plan.fine ? '' : ', whole percent only'));
 L.push('objects       ' + plan.objects.length + ' (' + res.stats.active + ' printed, '
   + res.stats.removed + ' removed)');
 L.push('lines         ' + plan.raw.length + ' -> ' + res.stats.gcodeLines

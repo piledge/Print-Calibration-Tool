@@ -507,6 +507,41 @@ function cutOk(raw, range) {
     whole.res.stats.travelFixes === 0, String(whole.res.stats.travelFixes));
 }
 
+/* --- 17c) Coarse mode: only the whole percent values ----------------------- */
+{
+  const raw = fullPlate(null);
+  const doc = makeDoc({});
+  const whole = v => Math.round(v * 1000) % 10 === 0;
+
+  const coarse = buildEmPlan(raw, doc, { fine: false });
+  check('coarse prints half the plate',
+    coarse.printed.length === VALUES.filter(whole).length,
+    coarse.printed.length + ' of ' + VALUES.length);
+  check('and only whole percent values',
+    coarse.printed.every(o => whole(o.value)),
+    coarse.printed.filter(o => !whole(o.value)).map(o => o.value).join(','));
+
+  // The grid hangs on the value, not on where the range starts: from 0.955 the
+  // 0.960 is printed, not the 0.955 itself.
+  const off = buildEmPlan(raw, doc, { from: 0.955, to: 0.975, fine: false });
+  check('the grid does not follow the range start',
+    off.printed.map(o => o.value.toFixed(3)).join(',') === '0.960,0.970',
+    off.printed.map(o => o.value.toFixed(3)).join(','));
+
+  const none = buildEmPlan(raw, doc, { from: 0.955, to: 0.955, fine: false });
+  check('a range without a whole percent value is an error',
+    none.issues.some(i => i.code === 'E14' && i.level === 'error'
+                          && /whole percent/.test(i.text)),
+    none.issues.map(i => i.code).join(','));
+
+  // Ticked, the plan has to be the one it always was.
+  const a = buildEmPlan(raw, doc, {});
+  const b = buildEmPlan(raw, doc, { fine: true });
+  check('half-percent steps change nothing',
+    a.printed.length === VALUES.length && b.printed.length === VALUES.length,
+    a.printed.length + '/' + b.printed.length);
+}
+
 /* --- 18) An incomplete plate is an error ---------------------------------- */
 function fullPlate(drop) {
   const L = [];

@@ -38,8 +38,12 @@ function mapLines(plan) {
   // by it. The values written into the file were always right -- only the map
   // did not add up for anyone recomputing it.
   const L = [MAP_BEGIN, '; em profile multiplier = ' + plan.profile.toFixed(5),
+    // The suffix only appears in the coarse mode, so every file made with the
+    // full step keeps the line it always had -- and a checker can recompute the
+    // selection from the map alone.
     '; em selected = ' + num(plan.from, 3) + ' … ' + num(plan.to, 3) + ', '
-      + plan.objects.filter(o => o.printed).length + ' of ' + plan.objects.length + ' plates'];
+      + plan.objects.filter(o => o.printed).length + ' of ' + plan.objects.length + ' plates'
+      + (plan.fine === false ? ', whole percent only' : '')];
   for (const o of plan.objects) {
     L.push('; em object ' + o.id + ' | ' + o.name +
       ' | em=' + num(o.value, 3) +

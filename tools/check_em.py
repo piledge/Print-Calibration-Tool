@@ -57,7 +57,10 @@ M486_A_RE = re.compile(r"^M486\s+A(.*?)\s*$")
 
 # Map header and cancel commands
 MULT_RE = re.compile(r"^;\s*em profile multiplier\s*=\s*(-?[0-9]*\.?[0-9]+)\s*$")
-SELECTED_RE = re.compile(r"^;\s*em selected = ([0-9.]+) … ([0-9.]+), (\d+) of (\d+) plates\s*$")
+# The trailing note appears only in the coarse mode, so a file made with the
+# full step reads exactly as it always did.
+SELECTED_RE = re.compile(r"^;\s*em selected = ([0-9.]+) … ([0-9.]+), (\d+) of (\d+) plates"
+                         r"(, whole percent only)?\s*$")
 MAP_OBJ_RE = re.compile(r"^;\s*em object\s+(\d+)\s*\|\s*(.*?)\s*\|\s*em=(\S+)\s*\|"
                         r"\s*factor=(\S+)\s*\|\s*x=(\S+)\s*\|\s*y=(\S+)\s*\|"
                         r"\s*(printed|removed[^|]*)\s*$")
@@ -475,6 +478,7 @@ class EmMap:
         self.malformed = []           # (line number, text)
         self.sel_from = self.sel_to = None
         self.sel_count = self.sel_total = None
+        self.sel_whole = False
         self.multiplier = None
         self.entries = []
         self.inserted = set()         # indexes of the inserted lines
@@ -515,6 +519,7 @@ class EmMap:
                 self.sel_to = parse_float(match.group(2))
                 self.sel_count = int(match.group(3))
                 self.sel_total = int(match.group(4))
+                self.sel_whole = match.group(5) is not None
                 continue
             match = MAP_OBJ_RE.match(line)
             if match:
@@ -586,6 +591,10 @@ def check_map_header(ctx):
             if e.em is None:
                 continue
             inside = emmap.sel_from - 1e-9 <= e.em <= emmap.sel_to + 1e-9
+            # Coarse mode: only the whole percent values, anchored to the value
+            # itself, not to the start of the range.
+            if emmap.sel_whole and round(e.em * 1000) % 10 != 0:
+                inside = False
             if inside != e.printed:
                 problems.append((0, "object %d (em=%.3f) is %s but %s the selected range"
                                  % (e.id, e.em, "printed" if e.printed else "removed",

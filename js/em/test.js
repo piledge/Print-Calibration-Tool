@@ -49,7 +49,7 @@ export const emTest = {
   id: 'em',
   legend2: 'Value range',
   bestLabel: 'Best plate',
-  panels: ['em-template', 'em-hint-1', 'em-plates', 'em-hint'],
+  panels: ['em-help', 'em-template', 'em-hint-1', 'em-plates', 'em-hint'],
   storage: true,
   selectionInPreview: true,    // the chosen tile is highlighted
   emptyInfo: 'Nothing to show — fix the errors above.',

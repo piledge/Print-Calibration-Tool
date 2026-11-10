@@ -60,7 +60,7 @@ export const ttTest = {
   id: 'tt',
   legend2: 'Temperature range',
   bestLabel: 'Best band',
-  panels: ['tt-template', 'tt-hint-1', 'tt-params', 'tt-hint'],
+  panels: ['tt-help', 'tt-template', 'tt-hint-1', 'tt-params', 'tt-hint'],
   storage: true,
   selectionInPreview: true,
   emptyInfo: 'Nothing to show — fix the errors above.',

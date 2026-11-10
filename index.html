@@ -18,12 +18,24 @@
   </header>
 
   <div class="tabs" role="radiogroup" aria-label="Calibration test">
-    <button type="button" class="tab" id="tab-tt" role="radio" aria-checked="true">Temperature Tower</button>
-    <button type="button" class="tab" id="tab-pa" role="radio" aria-checked="false" tabindex="-1">Pressure Advance</button>
-    <button type="button" class="tab" id="tab-em" role="radio" aria-checked="false" tabindex="-1">Extrusion Multiplier</button>
+    <button type="button" class="tab" id="tab-tt" role="radio" aria-checked="true">#1 Temperature Tower</button>
+    <button type="button" class="tab" id="tab-pa" role="radio" aria-checked="false" tabindex="-1">#2 Pressure Advance</button>
+    <button type="button" class="tab" id="tab-em" role="radio" aria-checked="false" tabindex="-1">#3 Extrusion Multiplier</button>
   </div>
 
   <main>
+
+    <fieldset id="help" class="panel">
+      <legend>Before you start</legend>
+      <div class="step-hint">
+        <p id="tt-help" class="hint">Optional – calibrate or choose the temperature before
+          calibrating #2 and #3.</p>
+        <p id="pa-help" class="hint" hidden>Calibrate or choose the temperature (#1) first.</p>
+        <p id="em-help" class="hint" hidden>Calibrate or choose the temperature (#1) and calibrate
+          pressure advance (#2) first. This test prints with the pressure advance value your
+          printer has set.</p>
+      </div>
+    </fieldset>
 
     <fieldset id="step-1" class="panel">
       <legend><span class="num">1</span> Load sliced gcode</legend>
@@ -231,7 +243,7 @@
   </main>
 
   <footer class="statusbar">
-    <p class="version">v0.2 beta</p>
+    <p class="version">v0.3 beta</p>
     <!-- Section 13 of the AGPL requires this link once the page runs publicly. -->
     <p class="source"><a href="https://github.com/piledge/Print-Calibration-Tool">Source</a></p>
     <p>piledge 2026</p>

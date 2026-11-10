@@ -56,7 +56,7 @@ export const paTest = {
   id: 'pa',
   legend2: 'Test parameters',
   bestLabel: 'Best line',
-  panels: ['pa-template', 'pa-hint-1', 'pa-params', 'pa-hint'],
+  panels: ['pa-help', 'pa-template', 'pa-hint-1', 'pa-params', 'pa-hint'],
   storage: true,
   selectionInPreview: false,   // the pattern view does not depend on the selection
   emptyInfo: 'No pattern — fix the errors above.',

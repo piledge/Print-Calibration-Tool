@@ -20,6 +20,12 @@ behaves like your normal prints, because most of it *is* your normal print.
 4. Download, print.
 5. Click the best specimen. You get the value and the line to put it in.
 
+Run the tests in the order of the tabs. The temperature tower is optional –
+calibrate or choose the temperature before calibrating pressure advance and the
+extrusion multiplier. Calibrate pressure advance before the extrusion
+multiplier: the EM test prints with whatever pressure advance your printer has
+set.
+
 ## Temperature tower
 
 ![Temperature tower test](docs/temperature-tower.png)
@@ -40,6 +46,8 @@ base is still printing, so nothing waits mid-print.
 Slice anything at all. The model is thrown away; only the settings are kept. The
 tool splices a chevron pattern between the slicer's start and end block, each
 chevron printed at a different PA value, and you pick the sharpest corner.
+Once the range is known, a second pass with an increment of 0.001 to 0.002
+around the best value narrows it down on a direct drive extruder.
 
 The pattern is similar to the one from [Andrew Ellis' tuning
 guide](https://ellis3dp.com/Print-Tuning-Guide/), redrawn.

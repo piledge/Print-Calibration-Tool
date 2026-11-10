@@ -1,0 +1,42 @@
+name: pages
+
+# Publishes main at the site root and the testing branch under /testing/.
+on:
+  push:
+    branches: [main, testing]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+      - uses: actions/checkout@v4
+        with:
+          ref: testing
+          path: testing
+      - run: |
+          mkdir -p _site/testing
+          cp -r main/. _site/
+          cp -r testing/. _site/testing/
+          rm -rf _site/.git _site/testing/.git
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

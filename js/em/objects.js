@@ -404,11 +404,11 @@ function settingIssues(settings) {
   const topSpeed = setSpeed === 0 ? parseFloat(settings.get('max_print_speed')) : setSpeed;
   if (topSpeed > 60) {
     issues.push(issue('warning', 'W51', 'Top solid infill runs at ' + topSpeed.toFixed(0)
-      + ' mm/s; Ellis tunes at 60 mm/s for a readable surface.'));
+      + ' mm/s; for a readable surface, at most 60 mm/s is recommended.'));
   }
   const infill = parseFloat(settings.get('fill_density'));
   if (infill < 30) {
-    issues.push(issue('warning', 'W52', 'Infill is ' + infill + ' %; Ellis asks for at least 30 %.'));
+    issues.push(issue('warning', 'W52', 'Infill is ' + infill + ' %; at least 30 % is recommended.'));
   }
   return issues;
 }

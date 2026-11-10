@@ -314,15 +314,26 @@ export function parseDocument(text) {
   // --- Material ------------------------------------------------------------
   const filamentDiameter   = num(settings, 'filament_diameter', tool);
   const extrusionMultiplier = firstPositive([num(settings, 'extrusion_multiplier', tool)], 1);
-  const maxVolumetric = firstPositive([
-    num(settings, 'filament_max_volumetric_speed', tool),
-    num(settings, 'max_volumetric_speed', tool),
-  ], 0); // 0 == unlimited
+  // PrusaSlicer caps by both, so the lower one applies; 0 == unlimited.
+  const [maxVolumetricSource, maxVolumetric] =
+    ['filament_max_volumetric_speed', 'max_volumetric_speed']
+      .map(key => [key, num(settings, key, tool)])
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => a[1] - b[1])[0] || [undefined, 0];
 
   // --- Speeds --------------------------------------------------------------
+  // The pattern stands in for the visible walls. 0 is PrusaSlicer's auto: the
+  // thinnest line runs at max_print_speed, and every pattern line is that line;
+  // the volumetric cap follows in pattern.js.
   const perimeterSpeed = num(settings, 'perimeter_speed', tool);
+  const externalSetting = num(settings, 'external_perimeter_speed', tool, perimeterSpeed);
+  const maxPrintSpeed = num(settings, 'max_print_speed', tool);
+  const [externalSpeedSource, externalSpeed] =
+    externalSetting > 0 ? ['external_perimeter_speed', externalSetting] :
+    externalSetting === 0 && maxPrintSpeed > 0 ? ['max_print_speed (auto)', maxPrintSpeed] :
+    ['perimeter_speed', perimeterSpeed];
   const firstLayerSpeed = firstPositive(
-    [num(settings, 'first_layer_speed', tool, perimeterSpeed)], perimeterSpeed);
+    [num(settings, 'first_layer_speed', tool, externalSpeed)], externalSpeed);
   const travelSpeed  = num(settings, 'travel_speed', tool);
   const travelSpeedZ = firstPositive([num(settings, 'travel_speed_z', tool)], travelSpeed);
 
@@ -353,11 +364,11 @@ export function parseDocument(text) {
   // The test has to run under the profile's conditions. Without setting them
   // explicitly, whatever the start macro left behind applies - on the Voron
   // 10000 mm/s^2 from CLEAN_NOZZLE instead of the profile's 3000.
-  const accelPrint = firstPositive([
-    num(settings, 'perimeter_acceleration', tool),
-    num(settings, 'default_acceleration', tool),
-    num(settings, 'machine_max_acceleration_extruding', tool),
-  ], 0);
+  const [accelPrintSource, accelPrint] =
+    ['external_perimeter_acceleration', 'perimeter_acceleration',
+     'default_acceleration', 'machine_max_acceleration_extruding']
+      .map(key => [key, num(settings, key, tool)])
+      .find(([, v]) => v > 0) || [undefined, 0];
   const accelFirstLayer = firstPositive([
     num(settings, 'first_layer_acceleration', tool),
   ], accelPrint);
@@ -458,16 +469,16 @@ export function parseDocument(text) {
       bed: bedRes.bed,
       relativeE, firmwareRetract,
     },
-    material: { filamentDiameter, extrusionMultiplier, maxVolumetric, filamentName,
-                temperature, firstLayerTemperature, bedTemperature,
+    material: { filamentDiameter, extrusionMultiplier, maxVolumetric, maxVolumetricSource,
+                filamentName, temperature, firstLayerTemperature, bedTemperature,
                 density: filamentDensity, cost: filamentCost },
     geometry: { nozzle, lineWidth, widthSource, firstLayerHeight, layerHeight },
-    speeds: { perimeter: perimeterSpeed, firstLayer: firstLayerSpeed,
-              travel: travelSpeed, travelZ: travelSpeedZ },
+    speeds: { externalPerimeter: externalSpeed, externalPerimeterSource: externalSpeedSource,
+              firstLayer: firstLayerSpeed, travel: travelSpeed, travelZ: travelSpeedZ },
     retract: { length: retractLength, speed: retractSpeed, deretractSpeed,
                extra: retractExtra, lift: retractLift },
-    accel: { print: accelPrint, firstLayer: accelFirstLayer, travel: accelTravel,
-             restore: accelRestore },
+    accel: { print: accelPrint, printSource: accelPrintSource, firstLayer: accelFirstLayer,
+             travel: accelTravel, restore: accelRestore },
     fan: { speed: fanSpeed, disableFirstLayers: disableFanFirstLayers },
     excludeObject,
     thumbnails: thumbs.specs,
@@ -492,8 +503,11 @@ export function describeDocument(doc) {
     ['Layer height',        mm(g.layerHeight),                            'layer_height'],
     ['Filament diameter',   mm(m.filamentDiameter),                       'filament_diameter'],
     ['Extrusion multiplier', Number.isFinite(m.extrusionMultiplier) ? m.extrusionMultiplier.toFixed(3) : '—', 'extrusion_multiplier'],
-    ['Max volumetric',      m.maxVolumetric ? m.maxVolumetric.toFixed(1) + ' mm³/s' : 'unlimited', 'filament_max_volumetric_speed'],
-    ['Perimeter speed',     mms(s.perimeter),                             'perimeter_speed'],
+    ['Max volumetric',      m.maxVolumetric ? m.maxVolumetric.toFixed(1) + ' mm³/s' : 'unlimited',
+                            m.maxVolumetricSource || 'filament_max_volumetric_speed / max_volumetric_speed'],
+    ['External perimeter speed', mms(s.externalPerimeter),               s.externalPerimeterSource],
+    ['External perimeter accel', doc.accel.print ? doc.accel.print.toFixed(0) + ' mm/s²' : 'not set',
+                            doc.accel.printSource || 'external_perimeter_acceleration'],
     ['First layer speed',   mms(s.firstLayer),                            'first_layer_speed'],
     ['Travel speed',        mms(s.travel),                                'travel_speed'],
     ['Travel speed Z',      mms(s.travelZ),                               'travel_speed_z'],

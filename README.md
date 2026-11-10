@@ -46,6 +46,8 @@ base is still printing, so nothing waits mid-print.
 Slice anything at all. The model is thrown away; only the settings are kept. The
 tool splices a chevron pattern between the slicer's start and end block, each
 chevron printed at a different PA value, and you pick the sharpest corner.
+The chevrons run at your external perimeter speed and acceleration, since those
+are the walls you see, with the perimeter extrusion width.
 Once the range is known, a second pass with an increment of 0.001 to 0.002
 around the best value narrows it down on a direct drive extruder.
 

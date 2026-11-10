@@ -176,6 +176,14 @@ else
 fi
 
 echo
+echo "== 6c) Pressure advance unit cases =="
+if node tools/test_pa.mjs >"$TMP/pa_unit.txt" 2>&1; then
+  echo "  ok           $(tail -1 "$TMP/pa_unit.txt")"
+else
+  echo "  FAILED"; grep '^FAIL' "$TMP/pa_unit.txt" | head -5; fail=1
+fi
+
+echo
 echo "== 7) check_em.py: output against input =="
 if [ "$SAMPLES" = "0" ]; then skip "section 7"; else
 # The checker expects ASCII, so the bgcode source is unpacked once; the renamed

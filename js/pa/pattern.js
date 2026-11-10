@@ -37,6 +37,8 @@ export const GEOM = Object.freeze({
 
 const PA_SCALE = 10000;     // integer domain, 4 decimals
 
+const SLOW_PATTERN_SPEED = 60;  // mm/s; below it PA errors barely show (Ellis)
+
 const SUPPORTED_FLAVORS = new Set(['klipper', 'marlin', 'marlin2', 'reprapfirmware']);
 
 /* ---------------------------------------------------------------- PA series */
@@ -260,16 +262,21 @@ export function buildPlan(doc, input) {
   /* --- speeds with volumetric limit --- */
   const clamp = (speed, h, w) => {
     if (!doc.material.maxVolumetric) return speed;
-    return Math.min(speed, doc.material.maxVolumetric / (w * h));
+    return Math.min(speed, doc.material.maxVolumetric / (h * (w - h * (1 - Math.PI / 4))));
   };
-  const sPattern = clamp(doc.speeds.perimeter, layerHeight, lineWidth);
+  const sPattern = clamp(doc.speeds.externalPerimeter, layerHeight, lineWidth);
   const sFirst = clamp(doc.speeds.firstLayer, firstLayerHeight,
                        hasAnchor ? Math.max(lineWidth, anchorLineWidth) : lineWidth);
-  if (sPattern < doc.speeds.perimeter - 1e-9 || sFirst < doc.speeds.firstLayer - 1e-9) {
+  if (sPattern < doc.speeds.externalPerimeter - 1e-9 || sFirst < doc.speeds.firstLayer - 1e-9) {
     issues.push(issue('warning', 'W3',
-      'Speed limited by volumetric flow: pattern ' + doc.speeds.perimeter.toFixed(0) + ' → ' +
+      'Speed limited by volumetric flow: pattern ' + doc.speeds.externalPerimeter.toFixed(0) + ' → ' +
       sPattern.toFixed(0) + ' mm/s, first layer ' + doc.speeds.firstLayer.toFixed(0) + ' → ' +
       sFirst.toFixed(0) + ' mm/s.'));
+  }
+  if (sPattern < SLOW_PATTERN_SPEED) {
+    issues.push(issue('warning', 'W10',
+      'Pattern speed ' + sPattern.toFixed(0) + ' mm/s is below ' + SLOW_PATTERN_SPEED +
+      ' mm/s; pressure advance errors show less clearly at low speed.'));
   }
 
   if (!hasAnchor) {

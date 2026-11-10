@@ -8,6 +8,7 @@
 
 import { issue } from '../settings.js';
 import { MOVE_RE, codeOf, moveE, eModeChange, g92E } from '../gcode.js';
+import { rebuildPlates } from './rebuild.js';
 
 /**
  * Name scheme. The value may stand alone ("0.945") or follow the prefix
@@ -386,11 +387,40 @@ function wholePercent(v) {
   return Math.round(v * 1000) % 10 === 0;
 }
 
+/** A speed in mm/s; PrusaSlicer gives top and solid infill as a share of the next one down. */
+function speedOf(settings, key) {
+  const value = (settings.get(key) || '').trim();
+  const base = { top_solid_infill_speed: 'solid_infill_speed', solid_infill_speed: 'infill_speed' }[key];
+  return value.endsWith('%') && base ? parseFloat(value) / 100 * speedOf(settings, base) : parseFloat(value);
+}
+
+/** Where the profile departs from what Ellis asks of this test. */
+function settingIssues(settings) {
+  const issues = [];
+  if ((settings.get('ironing') || '').trim() === '1') {
+    issues.push(issue('warning', 'W50', 'Ironing is on and smooths away the surface the test is read from.'));
+  }
+  const setSpeed = speedOf(settings, 'top_solid_infill_speed');
+  const topSpeed = setSpeed === 0 ? parseFloat(settings.get('max_print_speed')) : setSpeed;
+  if (topSpeed > 60) {
+    issues.push(issue('warning', 'W51', 'Top solid infill runs at ' + topSpeed.toFixed(0)
+      + ' mm/s; Ellis tunes at 60 mm/s for a readable surface.'));
+  }
+  const infill = parseFloat(settings.get('fill_density'));
+  if (infill < 30) {
+    issues.push(issue('warning', 'W52', 'Infill is ' + infill + ' %; Ellis asks for at least 30 %.'));
+  }
+  return issues;
+}
+
 /** `input` is {from, to, fine}, the selected range and its step. */
-export function buildEmPlan(raw, doc, input) {
+export function buildEmPlan(source, doc, input) {
+  const rebuilt = rebuildPlates(source, doc);
+  const raw = rebuilt.raw;
   const found = findObjects(raw, doc);
   // Of the settings.js messages only the tool index (W5) is carried over.
-  const issues = doc.issues.filter(i => i.code === 'W5').concat(found.issues);
+  const issues = doc.issues.filter(i => i.code === 'W5')
+    .concat(found.issues, rebuilt.issues, settingIssues(doc.settings));
   const bed = doc.printer.bed;
   if (!bed || !(bed.x > 0) || !(bed.y > 0)) {
     issues.push(issue('warning', 'W26',
@@ -427,7 +457,7 @@ export function buildEmPlan(raw, doc, input) {
 
   const hasError = issues.some(i => i.level === 'error');
   return Object.assign({}, found, {
-    raw, doc, issues, hasError, from, to, fine,
+    raw, source, rebuild: rebuilt.layers, doc, issues, hasError, from, to, fine,
     renderable: found.objects.length > 0 && !hasError,
     printed, bed, selected: -1,
   });

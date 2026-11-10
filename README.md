@@ -61,7 +61,12 @@ guide](https://ellis3dp.com/Print-Tuning-Guide/), redrawn.
 Slice the template complete: 56 tiles, 0.850 to 1.125 in
 steps of 0.005. The tool rewrites the extrusion of every tile so each one prints
 at its own multiplier, reading the target value from the object name. No geometry
-is regenerated — the toolpaths stay byte for byte what your slicer produced.
+is regenerated — the toolpaths are the ones your slicer produced.
+
+The tiles don't need a tall stack of top layers. With at least four, the tool
+builds each tile solid from your sliced layers: the bottom, two infill layers,
+the bridge, then the two layers above it repeated up to the top layer. Ironing,
+top solid infill faster than 60 mm/s and infill below 30 % get a warning.
 
 Pick a range and the tiles outside it are dropped from the file, so a five-tile
 run really only prints five tiles.

@@ -48,6 +48,7 @@ function mapLines(plan) {
     '; em selected = ' + num(plan.from, 3) + ' … ' + num(plan.to, 3) + ', '
       + plan.objects.filter(o => o.printed).length + ' of ' + plan.objects.length + ' plates'
       + (plan.fine === false ? ', whole percent only' : '')];
+  if (plan.rebuild) L.push('; em layers = ' + plan.rebuild.join(' '));
   for (const o of plan.objects) {
     L.push('; em object ' + o.id + ' | ' + o.name +
       ' | em=' + num(o.value, 3) +
@@ -370,14 +371,15 @@ export function generateEm(plan) {
   const stats = { filamentMm: extruded, filamentCm3, filamentG, filamentCost };
 
   let lines = rewriteStats(out, stats);
-  // Times are touched only when something was really cut: otherwise the
+  // Times are touched only when something was really cut or rebuilt: otherwise the
   // slicer's numbers would just be re-rounded through our own measure -- a
   // change without gain. `timeSec` reports the output time either way.
   let timeSec = headerSeconds(raw, TIME_NORMAL);
   let silentSec = headerSeconds(raw, TIME_SILENT);
-  if (cutting) {
-    const accSrc = moveSeconds(raw), accOut = moveSeconds(lines);
-    const share = accSrc[raw.length] > 0 ? accOut[lines.length] / accSrc[raw.length] : 1;
+  if (cutting || plan.rebuild) {
+    const source = plan.source || raw;
+    const accSrc = moveSeconds(source), accOut = moveSeconds(lines);
+    const share = accSrc[source.length] > 0 ? accOut[lines.length] / accSrc[source.length] : 1;
     timeSec *= share;
     silentSec *= share;
     lines = rewriteTime(lines, accOut, timeSec, silentSec);

@@ -72,6 +72,9 @@ if [ "$SAMPLES" = "0" ]; then skip "section 2"; else
 # so every case carries its range.
 EM_VORON="References/em_neu_Extrusion_Multipliers_0.4n_0.3mm_PLA_Voron 0.4mm CHT_4h31m.gcode"
 EM_CORE="References/em_neu_Extrusion_Multipliers_0.4n_0.25mm_PLA_COREONE_3h34m.bgcode"
+# Sliced with four top layers: the plates are rebuilt solid.
+EM_VORON4="References/ExtrusionMultiplier_template_0.4n_0.2mm_PLA_Voron 0.4mm CHT_4h0m_20261110.gcode"
+EM_CORE4="References/ExtrusionMultiplier_template_0.4n_0.2mm_PLA_COREONE_3h22m_20261110.bgcode"
 # name|source|rename (empty = none)|from|to|coarse
 EM_CASES="
 em_voron|$EM_VORON|||
@@ -83,6 +86,9 @@ em_coreone_low|$EM_CORE||0.850|0.900
 em_voron_em095|$EM_VORON|; extrusion_multiplier = 1:; extrusion_multiplier = 0.95||
 em_voron_prefix|$EM_VORON|'0_965':'EM_Cube_0_965_stl'||
 em_voron_coarse|$EM_VORON||||coarse
+em_voron_rebuilt|$EM_VORON4|||
+em_coreone_rebuilt|$EM_CORE4|||
+em_voron_rebuilt_mid|$EM_VORON4||0.950|1.000
 "
 echo "$EM_CASES" | while IFS='|' read -r name src ren lo hi coarse; do
   [ -z "$name" ] && continue
@@ -192,6 +198,7 @@ node -e "
 import('./tools/bgcode.mjs').then(async m => {
   const fs = await import('node:fs');
   fs.writeFileSync('$TMP/em_coreone_in.gcode', await m.readGcodeText('$EM_CORE'));
+  fs.writeFileSync('$TMP/em_coreone4_in.gcode', await m.readGcodeText('$EM_CORE4'));
   const v = fs.readFileSync('$EM_VORON', 'utf8');
   fs.writeFileSync('$TMP/em_voron_em095_in.gcode',
     v.split('; extrusion_multiplier = 1').join('; extrusion_multiplier = 0.95'));
@@ -203,7 +210,8 @@ for pair in "em_voron|$EM_VORON" "em_coreone|$TMP/em_coreone_in.gcode" \
             "em_voron_one|$EM_VORON" "em_coreone_low|$TMP/em_coreone_in.gcode" \
             "em_voron_em095|$TMP/em_voron_em095_in.gcode" \
             "em_voron_prefix|$TMP/em_voron_prefix_in.gcode" \
-            "em_voron_coarse|$EM_VORON"; do
+            "em_voron_coarse|$EM_VORON" "em_voron_rebuilt|$EM_VORON4" \
+            "em_coreone_rebuilt|$TMP/em_coreone4_in.gcode" "em_voron_rebuilt_mid|$EM_VORON4"; do
   name=${pair%%|*}; src=${pair#*|}
   if python3 tools/check_em.py "$src" "$TMP/$name.gcode" >"$TMP/ce.txt" 2>&1; then
     echo "  ok           $name  $(grep '^Summary' "$TMP/ce.txt")"

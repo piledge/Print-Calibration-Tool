@@ -129,6 +129,7 @@ export const emTest = {
       o.length ? o[0].value.toFixed(3) + ' … ' + o[o.length - 1].value.toFixed(3) : null,
       out.stats.removed ? o.length + ' of ' + count(plan.objects.length, 'plate')
                         : count(o.length, 'plate'),
+      plan.rebuild ? 'plates rebuilt solid' : null,
       formatSpan(out.stats.timeSec),
       out.stats.filamentMm.toFixed(0) + ' mm filament ('
         + out.stats.filamentCm3.toFixed(2) + ' cm³)',

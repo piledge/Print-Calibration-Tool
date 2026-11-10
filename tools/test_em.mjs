@@ -4,7 +4,7 @@
  * The fingerprints in `tools/golden/` cover the two real printers; here are the
  * cases that do not occur there: comments on move lines, other M486 spellings,
  * a mode switch mid-stream, a profile multiplier other than 1, the cut and its
- * retract seams, thumbnail replacement.
+ * retract seams, thumbnail replacement, plates rebuilt solid.
  * Run: node tools/test_em.mjs
  */
 import { findObjects, buildEmPlan, VALUES } from '../js/em/objects.js';
@@ -24,7 +24,8 @@ function check(name, ok, detail) {
 function makeDoc(opts) {
   const o = opts || {};
   return {
-    settings: new Map([['use_relative_e_distances', o.relativeE ? '1' : '0']]),
+    settings: new Map([['use_relative_e_distances', o.relativeE ? '1' : '0'],
+                       ...Object.entries(o.settings || {})]),
     printer: { relativeE: !!o.relativeE, bed: { x: 250, y: 250 } },
     material: {
       extrusionMultiplier: o.profile === undefined ? 1 : o.profile,
@@ -562,6 +563,138 @@ function fullPlate(drop) {
     whole.issues.map(i => i.code).join(','));
   check('and the default range prints all of it',
     whole.printed.length === VALUES.length, String(whole.printed.length));
+}
+
+/* --- 19) Plates rebuilt solid ----------------------------------------------
+   One feature type set per layer; two plates, Klipper or Marlin, absolute or
+   relative E, as the real files lay out a layer head. */
+function layered(types, opts) {
+  const o = opts || {};
+  const klipper = !!o.klipper, absolute = !o.relativeE;
+  const names = ['0.950', '1.050'];
+  const tag = n => n.replace('.', '_');
+  const L = [];
+  names.forEach((n, id) => L.push(...(klipper ? ['EXCLUDE_OBJECT_DEFINE NAME=' + tag(n)]
+                                              : ['M486 S' + id, 'M486 A' + n, 'M486 S-1'])));
+  let e = 0, x = 0, prevZ;
+  const e1 = step => absolute ? String(Math.round((e += step) * 1e4) / 1e4) : String(step);
+  // As in the real files the layer change carries the last plate's retract,
+  // the stay move at the old height and, on Klipper, the end of its object.
+  // The plate order and the extruded length change from layer to layer, so a
+  // copied layer finds neither the E counter nor the open object it was sliced after.
+  let last = null;
+  types.forEach((kinds, layer) => {
+    const z = String(Math.round((layer + 1) * 2) / 10);
+    L.push(';LAYER_CHANGE', ';Z:' + z, ';HEIGHT:0.2', ';' + z, 'G1 E' + e1(-.7) + ' F2100');
+    if (absolute) { L.push('G92 E0'); e = 0; }
+    if (layer) L.push('G1 X' + x + ' Y' + (9 + layer) + ' Z' + prevZ);
+    L.push('G1 X5 Y5 Z' + z);
+    if (klipper && last) L.push('EXCLUDE_OBJECT_END NAME=' + tag(last));
+    if (layer === 1) L.push('M106 S255');
+    const ids = layer % 3 ? [0, 1] : [1, 0];
+    ids.forEach((id, k) => {
+      const n = names[id];
+      L.push(klipper ? 'EXCLUDE_OBJECT_START NAME=' + tag(n) : 'M486 S' + id);
+      L.push('G1 X' + (10 + id * 30) + ' Y10 Z' + z, 'G1 E' + e1(.7) + ' F1500');
+      for (const kind of kinds.split(',')) {
+        L.push(';TYPE:' + kind, 'G1 X' + (20 + id * 30) + ' Y' + (10 + layer) + ' E' + e1(1 + layer / 10));
+      }
+      x = 20 + id * 30;
+      last = n;
+      if (k === 0) L.push('G1 E' + e1(-.7) + ' F2100', klipper ? 'EXCLUDE_OBJECT_END NAME=' + tag(n) : 'M486 S-1');
+    });
+    prevZ = z;
+  });
+  L.push(klipper ? 'EXCLUDE_OBJECT_END NAME=' + tag(last) : 'M486 S-1');
+  return L;
+}
+const SI = 'External perimeter,Solid infill', II = 'External perimeter,Internal infill';
+const BR = 'External perimeter,Bridge infill', TOP = 'External perimeter,Top solid infill';
+const PLATE = [SI, SI, II, II, II, II, BR, SI, SI, SI, TOP];
+const layerZ = L => L.filter(l => l.startsWith(';Z:')).map(l => l.slice(3)).join(' ');
+const mapLayers = L => (L.find(l => l.startsWith('; em layers = ')) || '').slice(14);
+{
+  const { found, res } = run(layered(Array(11).fill(SI)));
+  check('a solid plate stays as sliced', found.rebuild === null && !mapLayers(res.lines));
+}
+for (const opts of [{}, { relativeE: true }, { klipper: true }, { klipper: true, relativeE: true }]) {
+  const raw = layered(PLATE, opts);
+  const { found, res } = run(raw, opts);
+  const L = res.lines;
+  const tag = (opts.klipper ? 'klipper' : 'marlin') + (opts.relativeE ? '/rel' : '/abs') + ': ';
+  check(tag + 'bottom, two infill, bridge, pair, top', mapLayers(L) === '1 2 5 6 7 8 9 8 9 8 11',
+    mapLayers(L));
+  check(tag + 'heights run on as sliced', layerZ(L) === layerZ(raw), layerZ(L));
+  check(tag + 'no move outside the plate height',
+    L.every(l => !/^G1 .*Z(\d+\.?\d*)/.test(l) || parseFloat(/Z(\d+\.?\d*)/.exec(l)[1]) <= 2.6));
+  // Every extrusion adds the same, so the E counter must climb in steps of one.
+  let e = 0, bad = 0;
+  for (const l of L) {
+    const g92 = /^G92 E(\S+)/.exec(l);
+    if (g92) { e = parseFloat(g92[1]); continue; }
+    const m = /^G1 (.*)E(\S+)/.exec(l);
+    if (!m) continue;
+    const step = opts.relativeE ? parseFloat(m[2]) : parseFloat(m[2]) - e;
+    if (!opts.relativeE) e = parseFloat(m[2]);
+    const y = /Y(\d+)/.exec(m[1]);
+    const want = !m[1] ? .7 : (l.includes('X20 ') ? .95 : 1.05) * (1 + (y[1] - 10) / 10);
+    if (Math.abs(Math.abs(step) - want) > 1e-6) bad++;
+  }
+  check(tag + 'E counter consistent across the seams', bad === 0, bad + ' bad');
+  // A travel below the current layer may only stay in place: anything else
+  // drags the nozzle over the plate.
+  let x = null, y = null, z = 0, dragged = 0;
+  for (const l of L) {
+    if (l.startsWith(';Z:')) z = parseFloat(l.slice(3));
+    const mv = /^G1 (.*)/.exec(l);
+    if (!mv) continue;
+    const at = a => { const v = new RegExp(a + '(-?[\\d.]+)').exec(mv[1]); return v ? parseFloat(v[1]) : null; };
+    if (at('Z') !== null && at('Z') < z - 1e-6 && ((at('X') ?? x) !== x || (at('Y') ?? y) !== y)) dragged++;
+    x = at('X') ?? x; y = at('Y') ?? y;
+  }
+  check(tag + 'no travel across the plate below the layer', dragged === 0, dragged + ' dragged');
+  if (opts.klipper) {
+    let open = null, mismatched = 0;
+    for (const l of L) {
+      const start = /^EXCLUDE_OBJECT_START NAME=(\S+)/.exec(l);
+      const end = /^EXCLUDE_OBJECT_END NAME=(\S+)/.exec(l);
+      if (start) open = start[1];
+      if (end) { if (end[1] !== open) mismatched++; open = null; }
+    }
+    check(tag + 'every object end names the open object', mismatched === 0, mismatched + ' mismatched');
+  }
+  check(tag + 'reported in the result', found.rebuild && found.issues.every(i => i.code !== 'W53'));
+}
+for (const [name, types, order] of [
+  ['three bottom, five top layers', [SI, SI, SI, II, II, II, BR, SI, SI, SI, SI, TOP], '1 2 3 5 6 7 9 8 9 8 9 12'],
+  ['just two infill layers', [SI, SI, II, II, BR, SI, SI, TOP], '1 2 3 4 5 6 7 8'],
+]) {
+  const { res } = run(layered(types));
+  check(name + ': ' + order, mapLayers(res.lines) === order, mapLayers(res.lines));
+}
+{
+  const { found } = run(layered([SI, SI, II, BR, SI, SI, TOP]));
+  check('a single infill layer is refused with W53',
+    found.rebuild === null && found.issues.some(i => i.code === 'W53'),
+    found.issues.map(i => i.code).join(','));
+}
+{
+  const { found } = run(layered([SI, SI, II, II, II, II, BR, SI, TOP]));
+  check('three top layers are refused with W53',
+    found.rebuild === null && found.issues.some(i => i.code === 'W53'),
+    found.issues.map(i => i.code).join(','));
+}
+{
+  const settings = { ironing: '1', top_solid_infill_speed: '50%', solid_infill_speed: '200%',
+                     infill_speed: '100', fill_density: '15%' };
+  const codes = run(layered(PLATE), { settings }).codes;
+  check('ironing, top speed and sparse infill warned',
+    ['W50', 'W51', 'W52'].every(c => codes.includes(c)), codes.join(','));
+  const auto = run(layered(PLATE), { settings: { top_solid_infill_speed: '0', max_print_speed: '200' } }).codes;
+  check('top speed 0 is auto: max_print_speed', auto.includes('W51'), auto.join(','));
+  const calm = run(layered(PLATE), { settings: { top_solid_infill_speed: '60', fill_density: '30%' } }).codes;
+  check('no setting warning within the limits',
+    !calm.some(c => ['W50', 'W51', 'W52'].includes(c)), calm.join(','));
 }
 
 console.log('');

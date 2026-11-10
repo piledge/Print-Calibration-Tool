@@ -61,6 +61,7 @@ MULT_RE = re.compile(r"^;\s*em profile multiplier\s*=\s*(-?[0-9]*\.?[0-9]+)\s*$"
 # full step reads exactly as it always did.
 SELECTED_RE = re.compile(r"^;\s*em selected = ([0-9.]+) … ([0-9.]+), (\d+) of (\d+) plates"
                          r"(, whole percent only)?\s*$")
+LAYERS_RE = re.compile(r"^;\s*em layers = ([0-9 ]+?)\s*$")
 MAP_OBJ_RE = re.compile(r"^;\s*em object\s+(\d+)\s*\|\s*(.*?)\s*\|\s*em=(\S+)\s*\|"
                         r"\s*factor=(\S+)\s*\|\s*x=(\S+)\s*\|\s*y=(\S+)\s*\|"
                         r"\s*(printed|removed[^|]*)\s*$")
@@ -213,12 +214,14 @@ class ObjectInfo:
 class Scan:
     """A single pass over one file; collects everything needed."""
 
-    def __init__(self, path):
+    def __init__(self, path, lines=None):
         self.path = path
-        with open(path, "r", errors="replace") as handle:
-            self.lines = handle.read().split("\n")
-        if self.lines and self.lines[-1] == "":
-            self.lines.pop()
+        if lines is None:
+            with open(path, "r", errors="replace") as handle:
+                lines = handle.read().split("\n")
+            if lines and lines[-1] == "":
+                lines.pop()
+        self.lines = lines
 
         self.config = {}
         self._read_config()
@@ -481,6 +484,7 @@ class EmMap:
         self.sel_from = self.sel_to = None
         self.sel_count = self.sel_total = None
         self.sel_whole = False
+        self.layers = None            # source layer (1-based) of each output layer
         self.multiplier = None
         self.entries = []
         self.inserted = set()         # indexes of the inserted lines
@@ -522,6 +526,10 @@ class EmMap:
                 self.sel_count = int(match.group(3))
                 self.sel_total = int(match.group(4))
                 self.sel_whole = match.group(5) is not None
+                continue
+            match = LAYERS_RE.match(line)
+            if match:
+                self.layers = [int(n) for n in match.group(1).split()]
                 continue
             match = MAP_OBJ_RE.match(line)
             if match:
@@ -1270,6 +1278,160 @@ def check_probe_area(ctx):
     return result.ok(", ".join(notes) if notes else "nothing to check")
 
 
+# ---------------------------------------------------------------------------
+# Rebuilt plates
+# ---------------------------------------------------------------------------
+#
+# When the plates are rebuilt solid, the generator stacks source layers in the
+# order the map names. The checks above compare against the source; for them it
+# is rebuilt here by the same rules, from that order. Whether the order itself
+# is right is derived independently from the source's feature types.
+
+PLAIN_SOLID = {"External perimeter", "Perimeter", "Solid infill", "Gap fill"}
+FAN_RE = re.compile(r"^M10[67](?![0-9])", re.I)
+G92_E_RE = re.compile(r"^G92(?![0-9]).*\sE(-?(?:\d+(?:\.\d*)?|\.\d+))")
+BARE_NUM_RE = re.compile(r"^;\s*(-?(?:\d+(?:\.\d*)?|\.\d+))\s*$")
+XY_DROP_RE = re.compile(r"\s+[XY]-?[\d.]+")
+
+
+def format_coord(value):
+    text = ("%.5f" % value).rstrip("0").rstrip(".")
+    text = re.sub(r"^(-?)0\.", r"\1.", text)
+    return "0" if text in ("", "-", "-0") else text
+
+
+def comment_z(value):
+    return ("%.4f" % value).rstrip("0").rstrip(".")
+
+
+def scan_layers(lines, absolute_e):
+    layers = []
+    cur = kind = fan = x = y = None
+    e = 0.0
+    for idx, line in enumerate(lines):
+        t = line.strip()
+        if t == ";LAYER_CHANGE":
+            cur = {"start": idx, "z": None, "types": set(), "abs_e": absolute_e,
+                   "e_in": e, "x": x, "y": y, "fan": fan}
+            layers.append(cur)
+            continue
+        if t.startswith(";TYPE:"):
+            kind = t[6:]
+        elif cur and t.startswith(";Z:") and cur["z"] is None:
+            cur["z"] = float(t[3:])
+        if not t or t[0] == ";":
+            continue
+        code = command_part(t)
+        if FAN_RE.match(code):
+            fan = t
+            continue
+        if re.match(r"^M8[23](?![0-9])", code, re.I):
+            absolute_e = code[2] == "2"
+            continue
+        match = G92_E_RE.match(code)
+        if match:
+            e = float(match.group(1))
+            continue
+        if not MOVE_RE.match(code):
+            continue
+        value = axis(code, "E")
+        if value is not None:
+            delta = value - e if absolute_e else value
+            e = value if absolute_e else e + value
+            has_xy = axis(code, "X") is not None or axis(code, "Y") is not None
+            if cur and kind and delta > 0 and has_xy:
+                cur["types"].add(kind)
+        x = axis(code, "X") if axis(code, "X") is not None else x
+        y = axis(code, "Y") if axis(code, "Y") is not None else y
+    return layers
+
+
+def expected_layer_order(layers):
+    """Source layers (0-based) of the rebuilt plate, or None when it stays as sliced."""
+    sparse = [i for i, l in enumerate(layers) if "Internal infill" in l["types"]]
+    if not sparse or sparse[-1] == sparse[0] or sparse[0] == 0:
+        return None
+    first, last, top = sparse[0], sparse[-1], len(layers) - 1
+    pair = (last + 2, last + 3)
+    plain = all("Solid infill" in layers[i]["types"] and layers[i]["types"] <= PLAIN_SOLID
+                for i in pair if i < top)
+    if "Top solid infill" not in layers[top]["types"] or pair[1] >= top or not plain:
+        return None
+    step = layers[2]["z"] - layers[1]["z"]
+    if any(abs(layers[k + 1]["z"] - layers[k]["z"] - step) >= 1e-4 for k in range(1, top)):
+        return None
+    order = list(range(first)) + [last - 1, last, last + 1]
+    fill = [pair[0] if pair[0] % 2 == slot % 2 else pair[1] for slot in range(len(order), top)]
+    return order + fill + [top]
+
+
+def rebuild_source(lines, absolute_e, order):
+    """The source stacked in `order` (0-based layers), as the generator does it."""
+    layers = scan_layers(lines, absolute_e)
+    out = lines[:layers[0]["start"]]
+    fan, open_name = layers[0]["fan"], None
+    for slot, src in enumerate(order):
+        layer = layers[src]
+        end = layers[src + 1]["start"] if src + 1 < len(layers) else len(lines)
+        dz = layers[slot]["z"] - layer["z"]
+        seam = slot > 0 and order[slot - 1] != src - 1
+        if seam and layer["abs_e"]:
+            out.append("G92 E" + format_coord(layer["e_in"]))
+        if seam and layer["fan"] and layer["fan"] != fan:
+            out.append(layer["fan"])
+            fan = layer["fan"]
+        approaching = closing = seam
+        for line in lines[layer["start"]:end]:
+            t = line.strip()
+            code = command_part(t)
+            if dz:
+                bare = BARE_NUM_RE.match(t)
+                if t.startswith(";Z:"):
+                    line = ";Z:" + comment_z(layer["z"] + dz)
+                elif bare and abs(float(bare.group(1)) - layer["z"]) < 1e-6:
+                    line = ";" + comment_z(layer["z"] + dz)
+                elif MOVE_RE.match(code) and axis(code, "Z") is not None:
+                    full = command_part(line)
+                    lead = line[:len(line) - len(line.lstrip())]
+                    new = re.sub(r"((?:^|\s)Z)(-?(?:\d+(?:\.\d*)?|\.\d+))",
+                                 lambda m: m.group(1) + format_coord(axis(code, "Z") + dz), full, count=1)
+                    line = lead + new + line[len(lead) + len(full):]
+            if closing and OBJ_END_RE.match(t):
+                if open_name:
+                    out.append("EXCLUDE_OBJECT_END NAME=" + open_name)
+                open_name = None
+                continue
+            start = OBJ_START_RE.match(t)
+            if start:
+                open_name, closing = start.group(1), False
+            elif OBJ_END_RE.match(t):
+                open_name = None
+            if FAN_RE.match(t):
+                fan = t
+            if approaching and MOVE_RE.match(code):
+                has_xy = axis(code, "X") is not None or axis(code, "Y") is not None
+                if axis(code, "E") is not None and has_xy:
+                    approaching = False
+                elif axis(code, "E") is None and axis(code, "X") == layer["x"] \
+                        and axis(code, "Y") == layer["y"]:
+                    head = command_part(line)
+                    line = XY_DROP_RE.sub("", head) + line[len(head):]
+            out.append(line)
+    return out
+
+
+def check_layer_order(ctx):
+    result = Result("layer order of the rebuilt plates")
+    expected = expected_layer_order(scan_layers(ctx.original.lines, ctx.original.absolute_e))
+    written = ctx.map.layers
+    if expected is None and written is None:
+        return result.ok("plates left as sliced")
+    if expected is None or written is None or [i + 1 for i in expected] != written:
+        return result.fail("map says %s, the source asks for %s" % (
+            written, expected and [i + 1 for i in expected]))
+    return result.ok(" ".join(map(str, written)))
+
+
 CHECKS = (
     check_map_header,
     check_object_segmentation,
@@ -1284,6 +1446,7 @@ CHECKS = (
     check_progress,
     check_travel_between_objects,
     check_probe_area,
+    check_layer_order,
 )
 
 
@@ -1309,9 +1472,13 @@ class Context:
     """Bundles both files and the helper data derived from them."""
 
     def __init__(self, source, output):
-        self.source = source
+        self.original = source
         self.output = output
         self.map = EmMap(output)
+        if self.map.layers:
+            source = Scan(source.path, rebuild_source(
+                source.lines, source.absolute_e, [n - 1 for n in self.map.layers]))
+        self.source = source
         # Klipper addresses objects by name and the ids here are the position of
         # the declaration. The output no longer declares the removed plates, so
         # its numbering would run against the source's -- re-key it by name.
